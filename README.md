@@ -15,14 +15,14 @@ Everything runs in the browser: no server, no dependencies. Open `index.html`, o
 
 Open `index.html` locally, or enable GitHub Pages (Settings, Pages, Source: GitHub Actions). The workflow in `.github/workflows/pages.yml` publishes the page at every push to `main`.
 
-Main controls: beam energy E_b and the three helper buttons (E_b such that E = E_R at the target centre; E_b maximizing the reaction rate; E_b maximizing the detection rate), resonance energy and widths, projectile, beam current, chamber length, gas stop position, beam heating, detector and photon energy.
+Main controls: beam energy E_b and the three helper buttons (E_b such that E = E_R at the target centre; E_b maximizing the reaction rate; E_b maximizing the detection rate), resonance energy and widths, projectile, beam current, ²²Ne enrichment (100 % = pure ²²Ne; it scales only the absolute yield and rates), chamber length, gas stop position, beam heating, detector and photon energy.
 
 ## Model
 
 - Density profile of the target: measured 2 mbar profile (EPJA 54 (2018) 44, Fig. 2), mirrored about z = 0 and scaled to 1 mbar; beam heating removes a fraction bh% of gas per 25 W of beam.
 - Energy loss: proton stopping power in Ne; alpha obtained from the proton by Ziegler effective charge, normalized to 32.5e-15 eV cm² at 395 keV.
 - Energy straggling: Bohr with a Lindhard Scharff type low velocity reduction, variance propagation d(σ²)/dn = Ω² − 2ε′σ². Angular straggling: Molière.
-- Yield: dY/dz = n(z) · Iσ · V(E(z) − E_R), V Voigt profile (Weideman Faddeeva function, N = 32), path integral with adaptive substeps.
+- Yield: dY/dz = n(z) · (enrichment) · Iσ · V(E(z) − E_R), V Voigt profile (Weideman Faddeeva function, N = 32), path integral with adaptive substeps.
 
 ## Detection efficiency (Monte Carlo)
 
