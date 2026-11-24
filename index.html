@@ -1,0 +1,604 @@
+<title>Straggling in the neon target</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: panels aligned on the z axis on the left, controls and readouts on the right. Below 1000 px the controls move above. */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --fg:#1b2333; --muted:#5d6678; --line:#dfe3ea; --grid:#eceff4;
+  --beam:#1f6feb; --beam-soft:#cfe0ff; --prod:#e8590c; --det:#17895a; --res:#7c4dff; --wall:#c3c8d2;
+  --ctl:#eef1f6; --accent:#1f6feb;
+  --font-head:"Space Grotesk",system-ui,sans-serif; --font-body:"Inter",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10141c; --panel:#171c27; --fg:#e8ecf4; --muted:#9aa4b8; --line:#283043; --grid:#1f2634;
+  --beam:#5b9bff; --beam-soft:#22375c; --prod:#ff8a4c; --det:#3fd199; --res:#a58bff; --wall:#4a5366;
+  --ctl:#202738; --accent:#5b9bff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10141c; --panel:#171c27; --fg:#e8ecf4; --muted:#9aa4b8; --line:#283043; --grid:#1f2634;
+  --beam:#5b9bff; --beam-soft:#22375c; --prod:#ff8a4c; --det:#3fd199; --res:#a58bff; --wall:#4a5366;
+  --ctl:#202738; --accent:#5b9bff; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.45}
+.wrap{max-width:1500px;margin:0 auto;padding-block:20px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-family:var(--font-head);font-weight:600;font-size:24px;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--muted);margin:0 0 16px;max-width:90ch}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:1000px){.grid{grid-template-columns:minmax(0,1fr)}.ctrls{order:-1}}
+.plots{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;min-width:0}
+canvas{display:block;width:100%}
+.ctrls{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card h2{font-family:var(--font-head);font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;margin-bottom:12px}
+.ctl:last-child{margin-bottom:0}
+.ctl label{font-weight:500}
+.ctl .u{color:var(--muted);font-weight:400}
+.ctl input[type=number]{width:96px;font:inherit;font-variant-numeric:tabular-nums;color:var(--fg);background:var(--ctl);border:1px solid var(--line);border-radius:6px;padding:4px 6px;text-align:right}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent);margin:0}
+select{font:inherit;color:var(--fg);background:var(--ctl);border:1px solid var(--line);border-radius:6px;padding:4px 6px;width:100%}
+.chk{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.chk:last-child{margin-bottom:0}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;font-weight:500;color:var(--fg);background:var(--ctl);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.read{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-variant-numeric:tabular-nums}
+.read span:nth-child(odd){color:var(--muted)}
+.read span:nth-child(even){text-align:right;font-weight:600}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:baseline}
+.note{color:var(--muted);font-size:12.5px;margin:12px 0 0;max-width:110ch}
+</style>
+
+<div class="wrap">
+  <h1>Straggling in the neon target</h1>
+  <p class="sub">A proton or alpha beam crosses the LUNA ²²Ne gas target (standard profile at 1 mbar, obtained from the profile measured at 2 mbar; measured pressure and temperature profiles: connecting tube, AP_u, chamber, AP_d, beam stop) and hits a resonance of ²²Ne(p,γ)²³Na or, with alphas, of ²²Ne(α,γ)²⁶Mg. Choose the resonance and change density, energies, width, current and detector to see where the reactions occur and where they are detected.</p>
+  <div class="grid">
+    <div class="plots"><canvas id="cs" aria-label="Setup sketch in cavalier oblique projection" style="margin-bottom:6px"></canvas><canvas id="cv" aria-label="Panels along the target axis: beam section, energy, density, efficiency, reactions, yield curve"></canvas></div>
+    <div class="ctrls">
+      <div class="card">
+        <h2>Resonance</h2>
+        <div class="ctl" style="grid-template-columns:1fr"><label for="proj">Beam</label><select id="proj"><option value="p">Protons: ²²Ne(p,γ)²³Na</option><option value="a">Alpha particles: ²²Ne(α,γ)²⁶Mg</option></select></div>
+        <div class="ctl" style="grid-template-columns:1fr"><label for="pre" id="prelab">Resonance ²²Ne(p,γ)²³Na</label><select id="pre"></select></div>
+        <div class="ctl"><label for="er_n">Energy E<sub>R</sub> <span class="u">keV</span></label><input type="number" id="er_n" min="100" max="1100" step="0.1"><input type="range" id="er_r" min="100" max="1100" step="0.1" aria-label="Resonance energy"></div>
+        <div class="ctl"><label for="w_n">Strength ωγ <span class="u">eV</span></label><input type="number" id="w_n" min="1e-12" max="10" step="any"><input type="range" id="w_r" min="-12" max="1" step="0.01" aria-label="Resonance strength, log scale"></div>
+        <div class="ctl"><label for="g_n">Width Γ (Lorentzian) <span class="u">keV</span></label><input type="number" id="g_n" min="0.01" max="10" step="0.01"><input type="range" id="g_r" min="-2" max="1" step="0.005" aria-label="Resonance width, log scale"></div>
+      </div>
+      <div class="card">
+        <h2>Beam and target</h2>
+        <div class="ctl"><label for="ep_n">Beam energy E<sub>b</sub> <span class="u">keV</span></label><input type="number" id="ep_n" min="100" max="1100" step="0.05"><input type="range" id="ep_r" min="100" max="1100" step="0.05" aria-label="Beam energy"></div>
+        <div class="btns" style="margin:-4px 0 12px;display:flex;flex-direction:column;align-items:stretch;gap:6px">
+          <button id="ctr" type="button" title="Sets E_b so that the mean beam energy equals E_R at z = 0, the centre of the chamber">E<sub>b</sub> for E = E<sub>R</sub> at the centre (z = 0)</button>
+          <button id="eprod" type="button" title="Sets E_b to maximize the rate of produced reactions, ignoring the detector efficiency">E<sub>b</sub> to maximize the reaction rate</button>
+          <button id="eymax" type="button" title="Sets E_b to maximize the rate of detected reactions, including the detector efficiency as a function of z">E<sub>b</sub> to maximize the detection rate</button>
+          
+        </div>
+        <div class="ctl" style="grid-template-columns:1fr"><label for="sm">Straggling model</label><select id="sm"><option value="m">Improved (Molière, reduced Bohr)</option><option value="s">Simple (constant Bohr)</option></select></div>
+        <div class="ctl"><label for="zs_n" title="Position of the beam stop or calorimeter: the gas is truncated at this coordinate">Beam stop z<sub>stop</sub> <span class="u">cm</span></label><input type="number" id="zs_n" min="0" max="50" step="0.1"><input type="range" id="zs_r" min="0" max="50" step="0.1" aria-label="Position of the beam stop or calorimeter"></div>
+        <div class="ctl"><label for="lc_n">Chamber length <span class="u">cm</span></label><input type="number" id="lc_n" min="5" max="40" step="0.1"><input type="range" id="lc_r" min="5" max="40" step="0.1" aria-label="Chamber length, between AP_u and AP_d"></div>
+        <div class="ctl"><label for="bh_n" title="Density reduction due to gas heating, proportional to the beam power, over the whole profile">Beam heating <span class="u">% per 25 W</span></label><input type="number" id="bh_n" min="0" max="20" step="0.1"><input type="range" id="bh_r" min="0" max="20" step="0.1" aria-label="Beam heating, density reduction per 25 watts of beam"></div>
+        <div class="ctl"><label for="f_n">Density <span class="u">× 1 mbar profile</span></label><input type="number" id="f_n" min="0.1" max="10" step="0.01"><input type="range" id="f_r" min="-1" max="1" step="0.005" aria-label="Density, log scale"></div>
+        <div class="ctl"><label for="i_n" title="Current of particles with charge 1+ (H⁺ or He⁺)">Current <span class="u">µA</span></label><input type="number" id="i_n" min="1" max="500" step="1"><input type="range" id="i_r" min="1" max="500" step="1" aria-label="Beam current"></div>
+      </div>
+      <div class="card">
+        <h2>Detector</h2>
+        <div class="ctl" style="grid-template-columns:1fr"><label for="det">Detector (efficiency simulated with Monte Carlo)</label><select id="det"><option value="nai">NaI, 6 crystals 10 × 10 × 20 cm, 10 × 10 cm bore</option><option value="bgo">BGO, 6 trapezoidal prisms, hexagonal bore (inscribed Ø 60 mm), 70 mm thick, 28 cm long</option><option value="ge">HPGe 8 × 8 cm, at 90°</option><option value="c">Custom (analytic shape)</option></select></div>
+        <div class="ctl"><label for="eg_n">Photon energy E<sub>γ</sub> <span class="u">keV</span></label><input type="number" id="eg_n" min="0" max="20000" step="1"><input type="range" id="eg_r" min="0" max="20000" step="10" aria-label="Photon energy, 0 to 20 MeV"></div>
+        <div class="btns" style="margin:-4px 0 12px"><button id="egq" type="button">E<sub>γ</sub> = Q + E<sub>cm</sub> (transition to the ground state)</button></div>
+        <div id="custom">
+        <div class="ctl"><label for="l_n">Length (FWHM of η) <span class="u">cm</span></label><input type="number" id="l_n" min="1" max="40" step="0.1"><input type="range" id="l_r" min="1" max="40" step="0.1" aria-label="Detector length"></div>
+        <div class="ctl"><label for="e_n">Peak efficiency <span class="u">%</span></label><input type="number" id="e_n" min="1" max="100" step="1"><input type="range" id="e_r" min="1" max="100" step="1" aria-label="Peak efficiency"></div>
+        <div class="ctl" style="grid-template-columns:1fr"><label for="shape">Efficiency shape</label><select id="shape"><option value="8">Box</option><option value="2">Bell</option></select></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Display</h2>
+        <div class="chk"><input type="checkbox" id="tb" checked><label for="tb">Show the beam tube (Ø 20 / 24 mm)</label></div>
+        <div class="chk"><input type="checkbox" id="ov" checked><label for="ov">Overlay the histograms</label></div>
+        <div class="chk"><input type="checkbox" id="ns"><label for="ns">Show the response without straggling</label></div>
+        <div class="chk"><input type="checkbox" id="fx"><label for="fx">Lock the vertical scale of the histograms</label></div>
+        <div class="btns" style="margin-top:10px"><button id="pl" type="button">Pause</button><button id="rs" type="button">Default values</button></div>
+      </div>
+      <div class="card">
+        <h2>Readouts</h2>
+        <div class="read" id="read"></div>
+      </div>
+    </div>
+  </div>
+  <p class="note">Simplified model. Density from p(z) and T(z) measured upstream of the chamber for ²²Ne at 2 mbar, divided by 2 to obtain the standard profile at 1 mbar (Ferraro et al., EPJA 54, 2018, Fig. 2), mirrored downstream about the chamber centre (z = 0), with identical AP_u and AP_d (3.93 cm); the gas is truncated at z_stop. Protons: Bethe stopping power with a correction fitted to the values used in the thesis (14.72 · 14.07 · 12.91 × 10⁻¹⁵ eV cm²/atom at 156.2 · 189.5 · 259.7 keV) and Bohr straggling with Z₁ = 1, Z₂ = 10. Alphas: stopping power obtained from the proton at equal velocity with the Ziegler effective charge, normalized to 32.5 × 10⁻¹⁵ eV cm² (centre of mass system) at E<sub>α</sub> = 395 keV, the SRIM value used in Piatti et al., EPJA 58 (2022) 194. The alpha Bohr straggling at 395 keV through the 10.6 cm of the chamber at 1 mbar is about 1.5 keV, in agreement with the 1.4 keV value of that paper. Proton strengths: Ferraro PhD thesis 2017 (Tab. 5.1) up to 661 keV, then Iliadis et al., NPA 841 (2010) 251, which takes them from Endt 1990; at 661 keV the thesis gives 0.032 eV, Iliadis 0.35 eV and a recent preprint 0.472 eV; at 850.9 keV Iliadis gives 7.0 eV and Shahina et al. 2022 give 9.2 ± 0.7 eV. Alpha strengths: ≤ 4.0 × 10⁻¹¹ eV at 395 keV (LUNA, Piatti 2022), 2.8 ± 0.8 × 10⁻¹⁰ eV at 554 keV (Jayatissa 2020), upper limit ≤ 1.5 × 10⁻⁷ eV at 650 keV and (35 ± 2) × 10⁻⁶ eV at 830 keV (Shahina 2022, CASPAR). The other (α,γ) resonances below 1 MeV are not tabulated in the sources consulted: use "Custom". Total widths are not reported, so Γ is 0.1 keV for illustration. Values marked ≤ are upper limits. Yield per proton or alpha Y = (λ²/2) ωγ (M+m)/M ∫ n pdf dz. Beam heating: density reduction proportional to the beam power (current × energy) over the whole profile, uniform along z; the default value, 6% for 250 µA at 100 keV (25 W) in 2 mbar of ²²Ne, is the correction of EPJA 54 (2018) 44 for this chamber, and is also used for alphas. Detector: always centred on the chamber. Beam tube (Ø 20 / 24 mm): geometry only, excluding the gas density; the fraction of beam intercepted is estimated from the beam width (radial Gaussian) at a radius of 10 mm. Chamber length (default 20 cm; the Ferraro et al. measurement is at 10.6 cm): the ends, with AP_u and AP_d, move symmetrically and the measured profile moves with them. Detector efficiency: own Monte Carlo simulation (10⁶ photons per point) of isotropic photons emitted by point sources on the axis, for 28 energies between 20 keV and 20 MeV (between 0 and 20 keV it scales linearly to zero, below the absorption of the tube; interpolation in ln E) and 21 z positions between 0 and 30 cm (symmetric in z). Physics: photoelectric effect, Compton scattering with the Klein and Nishina cross section, pair production with annihilation at rest and tracking of the 511 keV photons; cross sections from xraylib up to 780 keV (photoelectric effect and Compton with binding), then Klein and Nishina, Bethe and Heitler parametrization for pairs (Geant4 type formula, verified on Pb and O at 10 MeV within 1%, applied up to 20 MeV) and power law extrapolation for the photoelectric effect; Rayleigh scattering is neglected and above about 10 MeV photonuclear production (giant resonance) is not included, nor is the escape of electrons and bremsstrahlung photons, which beyond a few MeV lowers the real peak efficiency compared with the simulated one. Secondary electrons deposit their energy locally, except the radiative fraction (bremsstrahlung), re-emitted as an isotropic photon of mean energy; there is no escape of K X rays or electrons. Peak: the energy deposited in the whole detector is smeared with a Gaussian of FWHM(E) (7% at 662 keV for NaI, 10% for BGO, 2 keV at 1332 keV for HPGe, scaling as √E, evaluated at the deposited energy), and an event counts in the peak if the smeared energy lies in the symmetric window E ± FWHM(E); this includes about 98% of the full energy Gaussian and excludes events with partial energy loss (escape of bremsstrahlung photons or Compton scattered photons) larger than about one FWHM. The total efficiency counts any deposit above 0.5 keV. Check: for the BGO and NaI arrays the simulated total efficiency lies between the analytic first interaction bounds (with and without the beam tube) at 50 keV to 1 MeV, and the geometric coverage from z = 0 is 87.2% (NaI) and 97.6% (BGO) of 4π; at 1 MeV the simulated total efficiency exceeds the no tube bound by 0.5% (BGO) and 3% (NaI), which is explained by photons scattered in the tube wall into the detector. Geometries: NaI is an array of six crystals of 10 × 10 × 20 cm (long axis parallel to the beam) in a brick arrangement around a square 10 × 10 cm bore, centred on z = 0: the two upper and the two lower crystals touch over whole faces, each of the two middle crystals touches half of an upper and half of a lower face; the crystals are in contact, with no gaps or dead layers, and the efficiency is that of the summed signal of all six (addback), so a photon scattered from one crystal to another is fully counted (the efficiency of a single crystal is lower). BGO is an array of six prisms with trapezoidal bases (height 7 cm), in contact along their oblique sides, forming a cylinder with a hexagonal through bore along the beam axis (inscribed circle of radius 3 cm, so the outer hexagon has an apothem of 10 cm), 28 cm long and centred on z = 0; as for NaI the crystals are in contact with no dead layers and the efficiency is that of the summed signal (the orientation of the hexagon, with flat faces up and down, and the 28 cm length are assumptions); HPGe (assumed dimensions) cylinder of 8 cm diameter and 8 cm length with axis perpendicular to the beam and face at 4 cm from the axis; the beam tube (stainless steel, inner Ø 20 mm, outer 24 mm, 2 mm thick, assumed material) crosses the bore and attenuates and scatters the photons; reaction chamber, supports and shields are absent. A single photon of energy E_γ is simulated: for cascades of several photons the 4π detectors measure a sum peak, with higher efficiency, which this model does not compute. Resonance: Breit and Wigner profile (Lorentzian of total width Γ, brought to the laboratory with (M+m)/M) convolved with the Gaussian beam energy distribution, that is a Voigt profile. Energy straggling (improved model): Bohr variance Ω² = 4π e⁴ Z₁² Z₂ N with effective charge for alphas, reduced at low velocity with a Lindhard and Scharff type factor (formula not verified against a primary source; the simple model shows the effect), and propagated along the path with dσ²/dn = Ω²(E) − 2 ε'(E) σ², where ε' is the derivative of the stopping power; non Gaussian tails and the excess of straggling near the stopping power maximum are not included. Angular straggling (improved model): Gaussian core of Molière multiple scattering with Thomas and Fermi screening, with energy and thickness varying along the path; for these thicknesses the Molière parameter b is small (few scatterings), so single scattering tails are not represented; initial divergence 0.5 mrad, initial size 1 mm. Model limits: beam heating is linear in the beam power (an extrapolation beyond the 25 W measured) and uniform in z; the beam has energy E<sub>b</sub> at the start of the domain (z = −(L<sub>chamber</sub>/2 + 25.7) cm) and the gas upstream of that point is neglected; the apertures AP_u and AP_d do not cut the beam in the calculation; the alpha stopping power is accurate to about 10%. Effect studied in Bemmerer et al., EPL 122 (2018) 52001.</p>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const NZ=1081,SB2=0.03*0.03,ND=170,LC0=10.6,ZE0=-5.3,UMAX=25.7,APW=3.93;
+let Z0=-31,Z1=5,DZ=(Z1-Z0)/(NZ-1);
+let S2=2.6e-3;
+const MN=21.991385,PPS=6.2415e12,PM={p:1.007276,a:4.001506};
+const RES_P=[
+ {E:156.2,w:2.03e-7,ul:false},{E:189.5,w:2.44e-6,ul:false},{E:259.7,w:9.1e-6,ul:false},
+ {E:436,w:0.079,ul:false},{E:479,w:0.594,ul:false},{E:638.5,w:2.45,ul:false},{E:661,w:0.032,ul:false},
+ {E:215,w:3.5e-8,ul:true},{E:291,w:2.2e-6,ul:true},{E:323,w:2.2e-6,ul:true},{E:334,w:3.0e-6,ul:true},{E:369,w:6.0e-4,ul:true},{E:394,w:6.0e-4,ul:true},
+ {E:661,w:0.472,ul:false,src:"preprint"},
+ {E:629.5,w:0.03,ul:false,src:"Iliadis 2010"},{E:725.0,w:0.13,ul:false,src:"Iliadis 2010"},{E:850.9,w:7.0,ul:false,src:"Iliadis 2010"},{E:850.9,w:9.2,ul:false,src:"CASPAR 2022"},
+ {E:896.6,w:1.8,ul:false,src:"Iliadis 2010"},{E:900.6,w:1.05,ul:false,src:"Iliadis 2010"},{E:919.8,w:0.8,ul:false,src:"Iliadis 2010"},
+ {E:928.9,w:0.35,ul:false,src:"Iliadis 2010"},{E:947.8,w:6.0,ul:false,src:"Iliadis 2010"},{E:980.9,w:0.4,ul:false,src:"Iliadis 2010"}
+].map((r,i)=>({...r,i})).sort((p,q)=>p.E-q.E||p.i-q.i);
+const RES_A=[
+ {E:395.2,w:4.0e-11,ul:true,src:"LUNA 2022"},
+ {E:554.4,w:2.8e-10,ul:false,src:"Jayatissa 2020"},{E:554.4,w:2.95e-11,ul:true,src:"Talwar 2016"},
+ {E:650,w:1.5e-7,ul:true,src:"Shahina 2022"},
+ {E:657.2,w:6.5e-11,ul:true,src:"Jayatissa 2020"},{E:657.2,w:5.4e-7,ul:false,src:"Talwar 2016, predicted"},
+ {E:830,w:3.5e-5,ul:false,src:"Shahina 2022"}
+].map((r,i)=>({...r,i}));
+let RES=RES_P;
+const DEF={Lc:20,zs:30,f:1,Ep:0,ER:479,w:0.594,G:0.1,L:28,zc:0,eff:57,I:200,shape:8,det:"nai",Eg:1000,tube:true,bh:6,sm:"m",pre:"",ul:false,proj:"p"};
+const S={...DEF,ov:true,ns:false,fx:false,play:true,fxMax:null};
+let z=new Float64Array(NZ);
+const sci=(v,dg=2)=>{if(!Number.isFinite(v)||v===0)return "0";const e=Math.floor(Math.log10(Math.abs(v)));const m=v/Math.pow(10,e);const sup="⁰¹²³⁴⁵⁶⁷⁸⁹";const es=String(Math.abs(e)).split("").map(c=>sup[+c]).join("");return m.toFixed(dg)+" × 10"+(e<0?"⁻":"")+es};
+const fmt=(v,dg=2)=>Number.isFinite(v)?v.toFixed(dg):"n/a";
+
+function endSlope(h0,h1,d0,d1){let m=((2*h0+h1)*d0-h0*d1)/(h0+h1);if(Math.sign(m)!==Math.sign(d0))m=0;else if(Math.sign(d0)!==Math.sign(d1)&&Math.abs(m)>3*Math.abs(d0))m=3*d0;return m}
+function pchip(xs,ys){const n=xs.length,h=[],d=[],m=new Array(n);
+  for(let i=0;i<n-1;i++){h[i]=xs[i+1]-xs[i];d[i]=(ys[i+1]-ys[i])/h[i]}
+  m[0]=endSlope(h[0],h[1],d[0],d[1]);m[n-1]=endSlope(h[n-2],h[n-3],d[n-2],d[n-3]);
+  for(let i=1;i<n-1;i++){if(d[i-1]*d[i]<=0)m[i]=0;else{const w1=2*h[i]+h[i-1],w2=h[i]+2*h[i-1];m[i]=(w1+w2)/(w1/d[i-1]+w2/d[i])}}
+  return x=>{let i=0;while(i<n-2&&x>xs[i+1])i++;const t=(x-xs[i])/h[i],t2=t*t,t3=t2*t;
+    return (2*t3-3*t2+1)*ys[i]+(t3-2*t2+t)*h[i]*m[i]+(-2*t3+3*t2)*ys[i+1]+(t3-t2)*h[i]*m[i+1]}}
+// 22Ne pressure at 2 mbar (log interpolation) and temperature, from Fig. 2 of EPJA 54 (2018) 44
+const lp=pchip([-31,-30.4,-23.1,-16.2,-8.25,-7.26,-6.24,-3.8,0,5],[0.078,0.078,0.088,0.110,1.04,1.35,1.6,2.0,2.0,2.0].map(Math.log));
+const pf=x=>Math.exp(lp(x));
+const Tf=pchip([-31,-10,-9.2,-5.3,-4,-1,0],[295,295,286,286,295.5,297.5,298.5]);
+let n0=new Float64Array(NZ),xa=new Float64Array(NZ),nref=1,THETA2=null;
+// profile symmetric about the chamber centre (z = 0): the upstream half (measured data) is mirrored downstream; z_stop truncates the gas
+function geom(Lc,zs){Z0=-(Lc/2+UMAX);Z1=Math.max(zs,0.05);DZ=(Z1-Z0)/(NZ-1);
+  for(let i=0;i<NZ;i++){z[i]=Z0+i*DZ;const zo=Math.min(5,Math.max(-31,ZE0-(Math.abs(z[i])-Lc/2)));n0[i]=3621.5*pf(zo)/Tf(Math.min(0,zo))}   // Ne atoms, 1e15 cm^-3; standard profile at 1 mbar = half of the one measured at 2 mbar
+  xa[0]=0;for(let i=1;i<NZ;i++)xa[i]=xa[i-1]+0.5*(n0[i]+n0[i-1])*DZ;
+  nref=n0[Math.round((0-Z0)/DZ)];
+  if(THETA2===null)THETA2=Math.pow(1.5*Math.PI/180,2)/xa[NZ-1]}   // 1.5 degrees rms at z = 5 cm (standard geometry), then constant
+geom(LC0,5);
+// proton stopping power in Ne (keV per 1e15 atoms/cm2)
+const corr=pchip([100,156.2,189.5,259.7,400,3000],[1.25,1.059,1.012,0.988,1,1]);
+function epsRaw(E){if(E<=0)return 0;const Ee=Math.max(E,100),mv2=2*Ee*1000/1836.153;let Sx=2606/mv2*Math.log(2*mv2/137);if(Sx<0)Sx=0;Sx*=corr(Ee);let r=Sx*1e-3;if(E<100)r*=Math.sqrt(E/100);return r}
+const ETAB=Float64Array.from({length:2601},(_,i)=>epsRaw(i*0.5));
+const SIM={E:[20, 50, 100, 150, 200, 300, 400, 511, 662, 800, 1000, 1332, 1700, 2000, 2600, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 12000, 14000, 16000, 18000, 20000],z:[0, 1.5, 3, 4.5, 6, 7.5, 9, 10.5, 12, 13.5, 15, 16.5, 18, 19.5, 21, 22.5, 24, 25.5, 27, 28.5, 30],N:1000000,nai:{pk:[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0.0328,0.033,0.0328,0.0321,0.0305,0.0274,0.0217,0.0155,0.0126,0.0101,0.0077,0.0057,0.0042,0.0031,0.0022,0.0015,0.001,0.0008,0.0006,0.0004,0.0003],[0.5048,0.5018,0.493,0.4745,0.4424,0.3927,0.3208,0.2558,0.2218,0.1908,0.1626,0.1379,0.1155,0.0968,0.0807,0.0675,0.0566,0.0474,0.0394,0.0335,0.0284],[0.6568,0.6516,0.638,0.6108,0.5692,0.5028,0.4175,0.341,0.2962,0.2574,0.2229,0.1907,0.1629,0.1392,0.1188,0.1016,0.0865,0.0748,0.0641,0.0556,0.0484],[0.6848,0.6805,0.6642,0.6361,0.5884,0.5228,0.4375,0.3579,0.3116,0.2703,0.2324,0.2002,0.1717,0.1466,0.1264,0.1084,0.0938,0.081,0.0699,0.0611,0.0534],[0.6706,0.6648,0.6476,0.6173,0.5707,0.5071,0.4296,0.3558,0.3053,0.2625,0.2254,0.1929,0.1651,0.1406,0.1207,0.1037,0.0901,0.0781,0.0682,0.0597,0.0523],[0.6282,0.6235,0.6056,0.5761,0.5326,0.4746,0.4059,0.3382,0.2889,0.2472,0.2102,0.1787,0.1518,0.1308,0.1116,0.0961,0.0829,0.0727,0.0638,0.0559,0.0493],[0.5784,0.575,0.559,0.5305,0.4906,0.4392,0.3783,0.3172,0.27,0.23,0.195,0.1658,0.1409,0.12,0.1032,0.09,0.078,0.0677,0.0589,0.0518,0.0457],[0.5225,0.5175,0.5028,0.4785,0.4425,0.3985,0.3449,0.2914,0.2474,0.2106,0.1775,0.1514,0.1291,0.1106,0.0944,0.082,0.0715,0.062,0.0546,0.048,0.0424],[0.4823,0.4775,0.4642,0.441,0.4105,0.3676,0.3206,0.2719,0.2314,0.197,0.1668,0.1413,0.1204,0.1031,0.0889,0.0767,0.067,0.0585,0.0518,0.0454,0.0404],[0.4339,0.4295,0.4178,0.3974,0.3695,0.3331,0.2909,0.2479,0.2133,0.1804,0.1526,0.1292,0.1109,0.0943,0.0815,0.071,0.0614,0.0545,0.0479,0.0425,0.0374],[0.3772,0.372,0.3625,0.3464,0.3219,0.2918,0.2564,0.2196,0.1889,0.1603,0.1355,0.1161,0.0989,0.0852,0.0735,0.0638,0.0558,0.049,0.0433,0.0385,0.0343],[0.3354,0.3312,0.3224,0.3073,0.2857,0.2602,0.2296,0.1971,0.1695,0.144,0.1223,0.1053,0.0896,0.077,0.0665,0.058,0.0509,0.045,0.0394,0.035,0.0315],[0.3116,0.3091,0.3003,0.2858,0.2661,0.243,0.2134,0.184,0.1583,0.1348,0.1144,0.0978,0.0842,0.0723,0.0622,0.0547,0.0479,0.0423,0.0375,0.0332,0.0299],[0.2828,0.2802,0.2727,0.259,0.2419,0.2187,0.1935,0.166,0.1435,0.1215,0.1041,0.0883,0.0757,0.0655,0.0566,0.0491,0.0433,0.0378,0.0337,0.0299,0.0269],[0.2693,0.2674,0.2595,0.2469,0.2292,0.2077,0.1829,0.1566,0.1346,0.1145,0.0974,0.0827,0.0709,0.0612,0.0537,0.0466,0.0409,0.0359,0.0315,0.0286,0.0254],[0.2457,0.2438,0.2357,0.2235,0.2063,0.1862,0.1631,0.1398,0.1185,0.1001,0.0851,0.0721,0.0621,0.0534,0.0461,0.0401,0.0352,0.031,0.0277,0.0246,0.0222],[0.2279,0.2247,0.218,0.2064,0.1895,0.1702,0.1477,0.1258,0.106,0.09,0.0757,0.0642,0.0547,0.0471,0.0406,0.0355,0.0311,0.0275,0.0242,0.0215,0.0192],[0.2119,0.2088,0.2014,0.1903,0.1741,0.1557,0.135,0.1141,0.0957,0.0805,0.0677,0.0572,0.0491,0.0417,0.0359,0.0316,0.0279,0.0243,0.0215,0.0192,0.0172],[0.1951,0.1932,0.1856,0.1749,0.1595,0.141,0.1224,0.1033,0.0865,0.0718,0.0609,0.0511,0.0434,0.0373,0.0324,0.0281,0.0243,0.0214,0.0189,0.0171,0.0152],[0.1801,0.1778,0.1708,0.1599,0.1461,0.1293,0.1115,0.0944,0.0785,0.0654,0.0548,0.0461,0.0391,0.0335,0.0288,0.0249,0.0217,0.0191,0.0166,0.0153,0.0135],[0.167,0.1649,0.1589,0.1489,0.1358,0.1197,0.1033,0.0865,0.072,0.06,0.0496,0.0423,0.0358,0.0303,0.0263,0.0226,0.0199,0.0176,0.0153,0.0136,0.0123],[0.1556,0.1538,0.1484,0.1386,0.1258,0.1108,0.0958,0.08,0.0667,0.0555,0.0458,0.0385,0.0326,0.0279,0.0242,0.0206,0.0181,0.016,0.0141,0.0126,0.0111],[0.1384,0.1375,0.1314,0.1225,0.1116,0.0977,0.0839,0.0705,0.0578,0.0481,0.04,0.0338,0.0283,0.0242,0.0209,0.018,0.0156,0.0139,0.0123,0.011,0.0097],[0.1282,0.1264,0.1215,0.1136,0.1026,0.0904,0.0764,0.0639,0.053,0.0435,0.0364,0.0305,0.0252,0.0217,0.0185,0.0162,0.014,0.0121,0.0109,0.0097,0.0085],[0.122,0.1203,0.1154,0.1069,0.0972,0.0846,0.0726,0.0601,0.0496,0.0406,0.0336,0.0283,0.0239,0.0204,0.0172,0.0149,0.0129,0.0113,0.0099,0.009,0.008],[0.118,0.1166,0.1118,0.1038,0.0942,0.0821,0.0693,0.0576,0.0473,0.039,0.0319,0.0269,0.0223,0.0191,0.0165,0.014,0.0124,0.0108,0.0095,0.0085,0.0076],[0.1146,0.1129,0.1088,0.1003,0.0905,0.0782,0.0666,0.0553,0.0449,0.0371,0.0307,0.0253,0.021,0.018,0.0155,0.0132,0.0115,0.0104,0.009,0.0081,0.007]],tot:[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0.0334,0.0336,0.0334,0.0327,0.0311,0.028,0.0222,0.0158,0.0128,0.0103,0.0078,0.0059,0.0043,0.0032,0.0023,0.0016,0.0011,0.0008,0.0006,0.0004,0.0003],[0.5338,0.5306,0.5213,0.5016,0.4678,0.4153,0.3399,0.2717,0.2356,0.2028,0.1728,0.1463,0.1226,0.1026,0.0855,0.0714,0.0599,0.0501,0.0417,0.0355,0.0301],[0.7395,0.7342,0.7191,0.6884,0.6421,0.5689,0.4731,0.3884,0.3381,0.2939,0.2541,0.2172,0.1853,0.1577,0.1343,0.1146,0.0976,0.0843,0.0719,0.0624,0.0541],[0.8029,0.7976,0.7794,0.7462,0.6923,0.6161,0.5176,0.4275,0.3738,0.3251,0.2799,0.2407,0.2061,0.1754,0.1509,0.1296,0.1118,0.0961,0.0827,0.0722,0.0631],[0.8234,0.8172,0.7975,0.7619,0.7069,0.6308,0.5364,0.4491,0.3907,0.3382,0.2913,0.2495,0.214,0.1827,0.1568,0.1345,0.1164,0.1011,0.0877,0.0767,0.0671],[0.8089,0.8018,0.7815,0.746,0.6924,0.6193,0.532,0.4474,0.3886,0.3353,0.2879,0.246,0.2098,0.1811,0.1546,0.1336,0.1152,0.1004,0.088,0.0771,0.0677],[0.7849,0.7803,0.7604,0.7242,0.673,0.6044,0.5212,0.4414,0.3828,0.3292,0.2821,0.2413,0.2066,0.1769,0.152,0.1322,0.1146,0.0995,0.0868,0.0762,0.0674],[0.7565,0.7497,0.7301,0.6974,0.6481,0.5841,0.5058,0.4312,0.373,0.321,0.2739,0.2346,0.2012,0.1733,0.148,0.1289,0.1121,0.0975,0.0853,0.0751,0.0664],[0.7338,0.7276,0.7087,0.6762,0.6303,0.5672,0.4934,0.4214,0.3644,0.3141,0.2689,0.2298,0.1967,0.1687,0.1461,0.1264,0.11,0.0962,0.085,0.0742,0.0654],[0.7034,0.6966,0.679,0.6483,0.6044,0.5459,0.4762,0.4076,0.3543,0.3039,0.2592,0.2215,0.1905,0.163,0.1409,0.1226,0.1066,0.0942,0.0825,0.0729,0.0647],[0.6622,0.6554,0.6398,0.6116,0.5712,0.5168,0.4535,0.3894,0.3378,0.2894,0.2478,0.2126,0.182,0.1575,0.1357,0.1181,0.1034,0.0907,0.0801,0.0709,0.0628],[0.6295,0.6236,0.6079,0.5821,0.5426,0.494,0.4345,0.3743,0.325,0.2789,0.2382,0.2053,0.1755,0.1518,0.1312,0.1146,0.1001,0.0883,0.0775,0.0687,0.0618],[0.6112,0.6063,0.5907,0.5643,0.5284,0.4798,0.4229,0.3654,0.3168,0.2725,0.2328,0.2,0.1717,0.1483,0.1281,0.1124,0.0986,0.0866,0.0769,0.068,0.0609],[0.5881,0.5815,0.5688,0.5434,0.5099,0.4637,0.4101,0.3546,0.3088,0.2647,0.2277,0.1944,0.1676,0.1447,0.1254,0.1097,0.0963,0.0845,0.0749,0.0666,0.0593],[0.5769,0.573,0.5591,0.5351,0.5015,0.4573,0.4042,0.3492,0.3046,0.2617,0.2244,0.192,0.1654,0.1433,0.1245,0.1087,0.0954,0.0842,0.0737,0.0666,0.059],[0.5654,0.5613,0.5484,0.5249,0.4915,0.4487,0.3974,0.3462,0.3,0.258,0.2215,0.1905,0.1644,0.1422,0.1232,0.1076,0.0943,0.083,0.074,0.0658,0.0591],[0.563,0.558,0.5452,0.5232,0.4905,0.4475,0.3966,0.3452,0.3004,0.2585,0.2222,0.19,0.1639,0.1413,0.1227,0.1076,0.0944,0.0836,0.0738,0.0661,0.0581],[0.5649,0.5603,0.5467,0.5243,0.4927,0.4499,0.3993,0.3473,0.3024,0.2605,0.2235,0.1919,0.1653,0.1425,0.1242,0.108,0.0953,0.0838,0.0745,0.0669,0.0595],[0.5691,0.5646,0.5514,0.5282,0.496,0.4523,0.4033,0.3513,0.3051,0.2619,0.2258,0.193,0.1665,0.1437,0.1254,0.1094,0.0957,0.0844,0.0748,0.0674,0.0601],[0.5735,0.57,0.556,0.5327,0.5012,0.4589,0.4056,0.3543,0.3082,0.2651,0.2273,0.1959,0.1679,0.1454,0.1261,0.1103,0.0968,0.0853,0.0753,0.0675,0.0603],[0.5801,0.5747,0.561,0.5393,0.5062,0.4627,0.4108,0.3582,0.3118,0.2681,0.2297,0.1978,0.1699,0.1469,0.128,0.1113,0.0978,0.0858,0.0769,0.0681,0.0606],[0.5856,0.5809,0.567,0.5443,0.51,0.4673,0.4155,0.3615,0.3146,0.2706,0.2316,0.1991,0.1715,0.1476,0.1288,0.1126,0.0984,0.0875,0.0769,0.0687,0.0612],[0.5962,0.592,0.5781,0.5547,0.5208,0.4771,0.4233,0.3691,0.3206,0.2763,0.2365,0.2041,0.1753,0.1515,0.1312,0.1145,0.1003,0.0886,0.0791,0.07,0.0621],[0.6067,0.6033,0.5896,0.5647,0.5302,0.4854,0.4306,0.3737,0.3258,0.2808,0.2409,0.2065,0.1776,0.1535,0.1334,0.1162,0.1018,0.0901,0.0799,0.071,0.0633],[0.6164,0.6124,0.5974,0.5733,0.5389,0.4924,0.4373,0.3802,0.3313,0.2855,0.2439,0.2094,0.1808,0.1562,0.1354,0.1177,0.103,0.0908,0.0803,0.0718,0.064],[0.6245,0.6205,0.6064,0.5817,0.5463,0.4988,0.4432,0.385,0.3345,0.2894,0.2472,0.2127,0.1827,0.1582,0.1366,0.1194,0.1043,0.092,0.082,0.0728,0.0646],[0.6331,0.6283,0.6137,0.5889,0.5521,0.5054,0.448,0.3892,0.3391,0.2925,0.2512,0.2144,0.1848,0.1597,0.1382,0.1209,0.1057,0.0933,0.0828,0.0733,0.0655]]},bgo:{pk:[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0.0331,0.0335,0.0331,0.0331,0.0333,0.033,0.033,0.0329,0.0301,0.021,0.014,0.0098,0.0069,0.0045,0.0028,0.0017,0.0011,0.0006,0.0004,0.0002,0.0001],[0.5432,0.5434,0.5425,0.5422,0.5393,0.5348,0.5237,0.4992,0.4406,0.3241,0.241,0.196,0.1567,0.1235,0.0956,0.0743,0.0577,0.0445,0.0349,0.0275,0.0218],[0.7365,0.7356,0.7344,0.732,0.7275,0.7169,0.7,0.6622,0.5822,0.4332,0.3297,0.2727,0.222,0.1795,0.1433,0.1143,0.0921,0.0742,0.0599,0.0494,0.04],[0.7847,0.7842,0.7825,0.7793,0.773,0.763,0.7409,0.6986,0.6122,0.4591,0.3508,0.2922,0.2392,0.1932,0.1566,0.1268,0.1022,0.0836,0.0688,0.0566,0.0464],[0.8066,0.8063,0.8043,0.8,0.7933,0.7807,0.7559,0.7084,0.6171,0.4648,0.3586,0.2964,0.2427,0.197,0.1595,0.1297,0.106,0.0866,0.0722,0.0599,0.0498],[0.814,0.8135,0.8112,0.8061,0.7973,0.7828,0.7535,0.7023,0.6081,0.4636,0.3573,0.294,0.2389,0.1942,0.1565,0.1265,0.1036,0.0856,0.0705,0.0593,0.0497],[0.8171,0.8169,0.8139,0.8083,0.7988,0.7803,0.7484,0.6924,0.5989,0.4601,0.3551,0.2885,0.2338,0.1879,0.152,0.1244,0.1009,0.083,0.0692,0.0575,0.0485],[0.8174,0.8151,0.8116,0.8049,0.7921,0.7712,0.7358,0.6766,0.5839,0.4528,0.3499,0.2821,0.2267,0.1813,0.1465,0.1185,0.0968,0.08,0.0666,0.0566,0.0477],[0.8091,0.8077,0.8046,0.795,0.7809,0.7577,0.7208,0.6606,0.57,0.4466,0.3438,0.2755,0.2199,0.1758,0.1419,0.1151,0.0945,0.0779,0.065,0.0547,0.0466],[0.791,0.7891,0.7839,0.7734,0.7581,0.7339,0.6949,0.6351,0.5482,0.4332,0.3342,0.2668,0.2114,0.169,0.136,0.1102,0.09,0.0748,0.0631,0.0529,0.0448],[0.7517,0.7508,0.744,0.7339,0.7172,0.6905,0.6511,0.5936,0.5133,0.4101,0.3177,0.2517,0.1994,0.1585,0.1271,0.1035,0.0853,0.0709,0.0592,0.0504,0.043],[0.7162,0.7137,0.7078,0.6968,0.6799,0.6528,0.6138,0.5595,0.484,0.3894,0.3034,0.2388,0.1889,0.1501,0.1209,0.0983,0.0811,0.0674,0.0569,0.048,0.0413],[0.6954,0.6942,0.6863,0.6763,0.658,0.6314,0.5939,0.5399,0.4659,0.3769,0.2928,0.23,0.1814,0.1454,0.1169,0.0949,0.078,0.0653,0.0552,0.047,0.0403],[0.6753,0.6732,0.6664,0.6554,0.6379,0.6109,0.5727,0.5193,0.4495,0.3601,0.2817,0.2201,0.1742,0.1383,0.1115,0.0907,0.0752,0.0628,0.0529,0.0451,0.0391],[0.6688,0.6668,0.6604,0.6482,0.6308,0.6032,0.5652,0.5132,0.4408,0.3549,0.275,0.2148,0.1691,0.1347,0.1084,0.0887,0.0733,0.0614,0.0515,0.0443,0.0379],[0.6637,0.6616,0.6549,0.6431,0.6242,0.5966,0.5569,0.5024,0.4303,0.3435,0.2638,0.2043,0.1606,0.1275,0.1024,0.084,0.0695,0.0582,0.0488,0.0418,0.0357],[0.6631,0.6616,0.6555,0.6421,0.6232,0.5944,0.5525,0.4959,0.4213,0.3342,0.2539,0.1949,0.153,0.1214,0.0971,0.0796,0.0661,0.0551,0.0461,0.0396,0.0343],[0.661,0.6601,0.6528,0.6392,0.6195,0.5883,0.5458,0.4861,0.4115,0.3233,0.2432,0.1857,0.145,0.1144,0.0915,0.0752,0.062,0.0519,0.044,0.037,0.032],[0.6544,0.6515,0.6433,0.6308,0.6098,0.5783,0.5346,0.4735,0.3982,0.3108,0.232,0.1761,0.1368,0.1079,0.0866,0.0701,0.0577,0.0486,0.0407,0.0344,0.0299],[0.6434,0.6407,0.633,0.6186,0.5966,0.5638,0.5196,0.4604,0.3836,0.2979,0.2209,0.167,0.1284,0.1013,0.0814,0.0661,0.0541,0.0454,0.0381,0.0321,0.0277],[0.6292,0.6266,0.6179,0.6037,0.5813,0.5484,0.5033,0.4431,0.3677,0.2842,0.2093,0.1577,0.1215,0.0961,0.0765,0.0618,0.051,0.0429,0.0357,0.0301,0.0259],[0.6128,0.61,0.6022,0.5877,0.5656,0.5331,0.4879,0.4281,0.3538,0.2732,0.2009,0.1514,0.1148,0.0905,0.0723,0.0578,0.0482,0.0402,0.0336,0.0287,0.0246],[0.5904,0.5884,0.5794,0.5635,0.5424,0.5106,0.4653,0.4074,0.3352,0.2565,0.187,0.1394,0.1066,0.0842,0.0666,0.0535,0.0445,0.0368,0.0308,0.0264,0.0225],[0.5841,0.5828,0.5724,0.5584,0.5369,0.504,0.4585,0.4011,0.3286,0.25,0.1818,0.1351,0.1029,0.0807,0.064,0.0516,0.0426,0.0353,0.0297,0.0251,0.0216],[0.5857,0.5832,0.5745,0.5601,0.5374,0.5048,0.459,0.3993,0.3273,0.2485,0.1797,0.1329,0.1019,0.0794,0.0626,0.051,0.0417,0.0345,0.029,0.0248,0.0212],[0.59,0.5868,0.5788,0.5635,0.5408,0.5081,0.4631,0.4015,0.3282,0.2476,0.1785,0.1311,0.1003,0.0775,0.0617,0.05,0.041,0.034,0.0286,0.0243,0.0205],[0.5936,0.5904,0.5824,0.568,0.5439,0.5101,0.4635,0.4035,0.3284,0.2468,0.1771,0.1305,0.0993,0.077,0.0608,0.0499,0.0404,0.0338,0.0278,0.0237,0.0204]],tot:[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0.0337,0.0342,0.0337,0.0338,0.0339,0.0337,0.0336,0.0335,0.0307,0.0214,0.0143,0.01,0.0071,0.0046,0.0029,0.0018,0.0011,0.0007,0.0004,0.0002,0.0001],[0.5645,0.5645,0.5638,0.5635,0.5606,0.5557,0.5445,0.5189,0.4586,0.3378,0.2517,0.2047,0.1635,0.1288,0.0996,0.0774,0.0601,0.0464,0.0363,0.0286,0.0227],[0.8047,0.804,0.8027,0.7998,0.795,0.784,0.7649,0.7238,0.6374,0.4766,0.3644,0.3004,0.2437,0.1969,0.1568,0.1249,0.1004,0.0807,0.065,0.0535,0.0433],[0.8897,0.8897,0.8875,0.8838,0.8766,0.8652,0.8406,0.7925,0.6958,0.5255,0.4053,0.3365,0.2745,0.2212,0.1787,0.1442,0.1161,0.0948,0.0778,0.0638,0.0523],[0.9445,0.9437,0.9413,0.9365,0.9281,0.9125,0.8844,0.8295,0.7248,0.5522,0.4319,0.3575,0.2922,0.2366,0.1912,0.1555,0.1266,0.1035,0.0858,0.071,0.0588],[0.9602,0.9595,0.9568,0.9512,0.9413,0.9238,0.8917,0.8335,0.7248,0.5583,0.4381,0.3621,0.2944,0.239,0.193,0.1564,0.1278,0.1052,0.0869,0.0728,0.0608],[0.9658,0.965,0.9617,0.9555,0.9443,0.9248,0.8899,0.8272,0.7201,0.5582,0.4404,0.3612,0.2934,0.2368,0.1916,0.1569,0.1273,0.1048,0.0872,0.0724,0.0611],[0.9661,0.9645,0.9607,0.9535,0.9411,0.9188,0.8817,0.8164,0.7098,0.5546,0.4385,0.3579,0.2898,0.2331,0.1889,0.1533,0.1256,0.1038,0.0863,0.0732,0.0614],[0.9616,0.9605,0.9566,0.9482,0.9346,0.9112,0.872,0.8059,0.7013,0.552,0.4352,0.3543,0.2851,0.2301,0.1864,0.1519,0.1246,0.1029,0.0859,0.0724,0.0614],[0.9516,0.9501,0.9456,0.9365,0.9209,0.8968,0.8556,0.7895,0.6866,0.5444,0.4296,0.3488,0.2799,0.2255,0.1828,0.1483,0.1219,0.1014,0.0854,0.0712,0.0604],[0.9307,0.9294,0.9243,0.9144,0.8978,0.8717,0.8302,0.7639,0.6653,0.5314,0.4206,0.3395,0.2717,0.2187,0.1764,0.1444,0.1192,0.0994,0.0828,0.0705,0.0599],[0.9123,0.9106,0.9051,0.8944,0.8779,0.851,0.8086,0.7449,0.6493,0.5215,0.4138,0.3329,0.2669,0.2141,0.1736,0.1416,0.1171,0.0974,0.0823,0.0691,0.0592],[0.9006,0.8991,0.8929,0.8825,0.8656,0.8382,0.797,0.7335,0.6396,0.5164,0.4102,0.3286,0.2625,0.2123,0.1717,0.1405,0.1159,0.0964,0.0818,0.0694,0.0595],[0.8875,0.8863,0.88,0.8697,0.8519,0.8256,0.7834,0.7208,0.6305,0.5087,0.4068,0.3253,0.2605,0.2094,0.1698,0.1382,0.1153,0.0961,0.0809,0.069,0.0594],[0.8825,0.8807,0.8754,0.8643,0.8471,0.8195,0.7778,0.7172,0.6256,0.5079,0.4046,0.3241,0.2589,0.2087,0.169,0.1388,0.1145,0.0962,0.0806,0.0692,0.0592],[0.8776,0.8761,0.8698,0.8594,0.8413,0.8148,0.7742,0.7127,0.6235,0.5062,0.4054,0.3241,0.2591,0.2081,0.1684,0.1391,0.1153,0.0964,0.0812,0.0692,0.059],[0.8778,0.8766,0.8711,0.8596,0.8429,0.8158,0.7748,0.714,0.6246,0.508,0.4057,0.3252,0.2606,0.2104,0.1697,0.1398,0.1164,0.0969,0.0813,0.07,0.06],[0.8809,0.8792,0.874,0.8629,0.8461,0.8186,0.7781,0.7165,0.6285,0.5108,0.4084,0.3274,0.2624,0.2112,0.1709,0.1411,0.1169,0.0974,0.0829,0.0703,0.0602],[0.8853,0.8834,0.877,0.8673,0.85,0.8228,0.7828,0.7205,0.6324,0.5144,0.4108,0.33,0.2649,0.213,0.1729,0.1415,0.1179,0.0986,0.0833,0.0704,0.0612],[0.8898,0.8882,0.883,0.872,0.8549,0.8277,0.7873,0.7266,0.6375,0.5175,0.4145,0.3329,0.2662,0.2149,0.1747,0.1432,0.1183,0.0992,0.0836,0.0709,0.0611],[0.8944,0.8929,0.8867,0.877,0.8593,0.833,0.7924,0.7301,0.6403,0.5205,0.4156,0.3346,0.269,0.217,0.1763,0.1443,0.1192,0.1001,0.0843,0.0714,0.0614],[0.8979,0.8967,0.8908,0.8805,0.8638,0.8382,0.7971,0.7349,0.6445,0.5231,0.4193,0.338,0.2694,0.2179,0.1775,0.1451,0.1201,0.1007,0.0848,0.0725,0.0622],[0.9062,0.9045,0.8987,0.8884,0.8715,0.8457,0.8047,0.7425,0.6513,0.5298,0.4233,0.3413,0.2735,0.2212,0.1796,0.1469,0.1221,0.1017,0.0855,0.0731,0.0626],[0.9128,0.9114,0.9052,0.8952,0.8794,0.8524,0.8124,0.7501,0.6581,0.5344,0.4272,0.3448,0.2771,0.2231,0.1806,0.1486,0.1228,0.1028,0.0868,0.0739,0.0634],[0.9183,0.9163,0.9108,0.9015,0.8849,0.8586,0.8186,0.7566,0.6631,0.5379,0.4311,0.3478,0.2797,0.2255,0.1826,0.1507,0.1241,0.1038,0.0874,0.0746,0.0638],[0.9234,0.921,0.9161,0.9064,0.8899,0.864,0.8245,0.7612,0.669,0.5424,0.4341,0.35,0.282,0.2264,0.1838,0.152,0.1255,0.1043,0.0884,0.075,0.0644],[0.9273,0.9254,0.9202,0.9106,0.8944,0.8688,0.8287,0.7658,0.6726,0.5444,0.436,0.3526,0.2843,0.2293,0.1859,0.1531,0.1258,0.1059,0.0885,0.0755,0.0646]]},ge:{pk:[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0.0067,0.0061,0.0045,0.0026,0.0016,0.0011,0.0007,0.0004,0.0003,0.0002,0.0001,0.0001,0.0001,0,0,0,0,0,0,0,0],[0.0739,0.069,0.0547,0.0384,0.0287,0.0219,0.0171,0.0134,0.0105,0.0082,0.0066,0.0052,0.0041,0.0033,0.0026,0.0023,0.0018,0.0014,0.0013,0.001,0.0009],[0.0813,0.0762,0.0622,0.0458,0.0352,0.0278,0.0222,0.0176,0.0146,0.0117,0.0095,0.008,0.0064,0.0054,0.0046,0.004,0.0033,0.0027,0.0025,0.002,0.0017],[0.0729,0.0688,0.0571,0.0431,0.0334,0.0266,0.0215,0.0173,0.0142,0.0116,0.0096,0.0079,0.0067,0.0055,0.0048,0.0041,0.0035,0.0031,0.0026,0.0023,0.002],[0.0573,0.0538,0.0456,0.0349,0.0276,0.0221,0.0178,0.0148,0.012,0.0099,0.0082,0.0069,0.0059,0.0049,0.0042,0.0036,0.0032,0.0028,0.0024,0.0021,0.0019],[0.0476,0.0447,0.0382,0.0297,0.0233,0.019,0.0154,0.0128,0.0105,0.0086,0.0073,0.0061,0.005,0.0043,0.0038,0.0033,0.0028,0.0024,0.0022,0.0018,0.0017],[0.0407,0.0384,0.0332,0.0259,0.0205,0.0163,0.0136,0.011,0.0092,0.0075,0.0063,0.0053,0.0045,0.0039,0.0033,0.0028,0.0025,0.0021,0.0019,0.0017,0.0015],[0.0343,0.0328,0.0281,0.0222,0.018,0.0143,0.0117,0.0095,0.0079,0.0066,0.0055,0.0046,0.004,0.0034,0.0029,0.0026,0.0022,0.0021,0.0018,0.0015,0.0013],[0.0307,0.0293,0.0253,0.0204,0.0163,0.0132,0.0107,0.0089,0.0074,0.006,0.0051,0.0044,0.0036,0.0032,0.0028,0.0024,0.0021,0.0018,0.0016,0.0015,0.0013],[0.0266,0.0256,0.0223,0.0177,0.0143,0.0115,0.0094,0.0077,0.0065,0.0053,0.0044,0.0038,0.0032,0.0028,0.0024,0.0021,0.0018,0.0016,0.0015,0.0013,0.0012],[0.0226,0.0217,0.019,0.0151,0.0124,0.01,0.0081,0.0067,0.0055,0.0047,0.0039,0.0033,0.0029,0.0025,0.0021,0.0019,0.0016,0.0014,0.0013,0.0012,0.001],[0.0192,0.0184,0.0162,0.0131,0.0108,0.0087,0.0071,0.0059,0.0049,0.004,0.0034,0.0029,0.0024,0.0022,0.0019,0.0017,0.0015,0.0013,0.0012,0.001,0.0009],[0.0176,0.0166,0.0148,0.0119,0.0098,0.0079,0.0066,0.0054,0.0044,0.0037,0.0031,0.0027,0.0022,0.002,0.0018,0.0015,0.0013,0.0011,0.001,0.001,0.0008],[0.0145,0.0141,0.0124,0.0102,0.0083,0.0067,0.0054,0.0046,0.0037,0.0031,0.0027,0.0023,0.0019,0.0017,0.0015,0.0013,0.0011,0.001,0.0008,0.0007,0.0007],[0.0126,0.0123,0.0107,0.0088,0.0071,0.0058,0.0049,0.0039,0.0033,0.0028,0.0023,0.002,0.0017,0.0016,0.0013,0.0011,0.001,0.0009,0.0007,0.0007,0.0006],[0.0089,0.0086,0.0075,0.0061,0.0051,0.0041,0.0033,0.0028,0.0022,0.0019,0.0016,0.0014,0.0012,0.001,0.0009,0.0008,0.0007,0.0007,0.0006,0.0005,0.0005],[0.0063,0.0061,0.0053,0.0043,0.0036,0.0029,0.0024,0.002,0.0015,0.0014,0.0011,0.001,0.0009,0.0007,0.0007,0.0006,0.0005,0.0005,0.0004,0.0004,0.0003],[0.0046,0.0046,0.0039,0.0033,0.0026,0.0022,0.0017,0.0014,0.0012,0.001,0.0009,0.0007,0.0006,0.0006,0.0004,0.0004,0.0004,0.0003,0.0003,0.0002,0.0003],[0.0036,0.0035,0.003,0.0025,0.002,0.0016,0.0013,0.0011,0.0009,0.0008,0.0007,0.0006,0.0005,0.0004,0.0004,0.0003,0.0003,0.0003,0.0002,0.0002,0.0002],[0.0028,0.0027,0.0024,0.002,0.0016,0.0013,0.0011,0.0008,0.0007,0.0006,0.0005,0.0005,0.0004,0.0003,0.0003,0.0003,0.0002,0.0002,0.0002,0.0002,0.0001],[0.0024,0.0022,0.0019,0.0015,0.0013,0.001,0.0008,0.0007,0.0006,0.0005,0.0004,0.0003,0.0003,0.0003,0.0002,0.0002,0.0002,0.0002,0.0001,0.0001,0.0001],[0.0019,0.0018,0.0016,0.0013,0.0011,0.0008,0.0007,0.0006,0.0005,0.0004,0.0004,0.0003,0.0002,0.0002,0.0002,0.0002,0.0001,0.0001,0.0001,0.0001,0.0001],[0.0014,0.0014,0.0013,0.001,0.0008,0.0006,0.0005,0.0005,0.0003,0.0003,0.0003,0.0002,0.0002,0.0002,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001],[0.0012,0.0011,0.001,0.0008,0.0006,0.0005,0.0004,0.0003,0.0003,0.0002,0.0002,0.0002,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001],[0.0009,0.0009,0.0008,0.0007,0.0005,0.0004,0.0003,0.0003,0.0003,0.0002,0.0002,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001],[0.0007,0.0007,0.0007,0.0005,0.0004,0.0003,0.0003,0.0003,0.0002,0.0002,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0,0.0001,0],[0.0006,0.0006,0.0006,0.0004,0.0003,0.0003,0.0002,0.0002,0.0002,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0.0001,0,0,0,0]],tot:[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0.007,0.0064,0.0047,0.0027,0.0017,0.0011,0.0007,0.0005,0.0003,0.0002,0.0001,0.0001,0.0001,0,0,0,0,0,0,0,0],[0.0884,0.0826,0.0659,0.0466,0.035,0.0268,0.0209,0.0162,0.0127,0.01,0.008,0.0063,0.0049,0.004,0.0033,0.0028,0.0022,0.0018,0.0015,0.0012,0.0011],[0.1094,0.1028,0.0844,0.0631,0.0491,0.0389,0.0312,0.0247,0.0203,0.0162,0.0131,0.011,0.0087,0.0074,0.0062,0.0054,0.0045,0.0038,0.0034,0.0028,0.0023],[0.1104,0.1042,0.0872,0.0669,0.0527,0.042,0.0339,0.0274,0.0224,0.0181,0.015,0.0124,0.0105,0.0086,0.0074,0.0063,0.0054,0.0047,0.004,0.0035,0.003],[0.1066,0.0996,0.0845,0.0662,0.0534,0.043,0.0348,0.0285,0.0233,0.0191,0.0158,0.0134,0.0112,0.0094,0.0081,0.0069,0.006,0.0052,0.0045,0.004,0.0035],[0.1019,0.0966,0.0826,0.0649,0.0522,0.0425,0.0345,0.0283,0.023,0.0192,0.0161,0.0135,0.0112,0.0095,0.0083,0.0072,0.0062,0.0052,0.0046,0.0041,0.0037],[0.098,0.093,0.0805,0.0633,0.051,0.0411,0.0337,0.0276,0.023,0.0188,0.0158,0.0133,0.0112,0.0097,0.0084,0.007,0.0062,0.0054,0.0046,0.0042,0.0038],[0.0931,0.0891,0.0766,0.061,0.0497,0.0399,0.0327,0.0267,0.0221,0.0183,0.0154,0.013,0.0112,0.0096,0.0081,0.0072,0.0062,0.0056,0.0047,0.0041,0.0037],[0.0901,0.0858,0.074,0.0599,0.0484,0.0394,0.032,0.0266,0.0221,0.0182,0.0154,0.0128,0.0111,0.0094,0.0083,0.0071,0.0062,0.0055,0.0047,0.0042,0.0037],[0.0854,0.0817,0.0707,0.0571,0.0461,0.038,0.0308,0.0256,0.0211,0.0174,0.0148,0.0124,0.0105,0.0092,0.0079,0.0069,0.0061,0.0053,0.0047,0.0043,0.0037],[0.0797,0.0761,0.0668,0.0537,0.0438,0.0356,0.0293,0.0242,0.02,0.0168,0.014,0.0119,0.0102,0.009,0.0077,0.0068,0.0057,0.0052,0.0046,0.0041,0.0036],[0.0749,0.0718,0.0626,0.0508,0.042,0.0341,0.0281,0.0232,0.019,0.0161,0.0137,0.0115,0.0097,0.0085,0.0074,0.0066,0.0057,0.005,0.0045,0.004,0.0035],[0.0725,0.0691,0.0604,0.0493,0.0406,0.0333,0.0276,0.0226,0.0185,0.0156,0.013,0.0112,0.0094,0.0083,0.0072,0.0063,0.0056,0.0048,0.0043,0.0039,0.0034],[0.0691,0.0662,0.0581,0.0476,0.0387,0.0317,0.0262,0.0216,0.018,0.015,0.0126,0.011,0.0092,0.008,0.0071,0.0061,0.0054,0.0048,0.0041,0.0037,0.0034],[0.0671,0.0643,0.0566,0.0462,0.038,0.031,0.0255,0.0211,0.0176,0.0147,0.0124,0.0106,0.0092,0.008,0.0069,0.0059,0.0054,0.0047,0.0042,0.0037,0.0032],[0.0647,0.0624,0.0546,0.0455,0.0367,0.0304,0.0249,0.0204,0.0167,0.0143,0.0121,0.0103,0.009,0.0077,0.0066,0.006,0.0053,0.0046,0.0041,0.0037,0.0032],[0.0638,0.0615,0.0541,0.0444,0.0366,0.0299,0.0243,0.0202,0.0167,0.0142,0.012,0.0102,0.0088,0.0076,0.0067,0.0058,0.0051,0.0046,0.004,0.0035,0.0032],[0.0637,0.0609,0.0541,0.0447,0.0365,0.0296,0.0246,0.0202,0.0164,0.014,0.012,0.0101,0.0087,0.0077,0.0065,0.0057,0.005,0.0044,0.0041,0.0036,0.0033],[0.0641,0.0612,0.0541,0.0447,0.0367,0.0299,0.0245,0.0201,0.0165,0.0141,0.012,0.0103,0.0088,0.0075,0.0067,0.0058,0.0052,0.0045,0.0041,0.0036,0.0032],[0.0648,0.062,0.0544,0.0448,0.0366,0.0303,0.0248,0.0204,0.017,0.0142,0.0121,0.0102,0.0087,0.0076,0.0067,0.0057,0.0051,0.0046,0.004,0.0036,0.0033],[0.0649,0.0623,0.0551,0.0454,0.0376,0.0305,0.0247,0.0205,0.017,0.0144,0.0121,0.0104,0.0088,0.0077,0.0068,0.0058,0.0052,0.0047,0.0041,0.0036,0.0033],[0.0656,0.0627,0.0556,0.046,0.0374,0.0309,0.0255,0.0206,0.0171,0.0144,0.0122,0.0104,0.0089,0.0077,0.0068,0.0059,0.0051,0.0045,0.0041,0.0037,0.0034],[0.0669,0.0639,0.0563,0.0462,0.0383,0.0311,0.0256,0.021,0.0174,0.0147,0.0123,0.0106,0.009,0.0078,0.0069,0.0059,0.0053,0.0046,0.0043,0.0038,0.0033],[0.0679,0.0651,0.0575,0.0471,0.0391,0.0317,0.0261,0.0214,0.0178,0.0149,0.0125,0.0106,0.009,0.008,0.0069,0.0061,0.0053,0.0048,0.0042,0.0039,0.0035],[0.0693,0.0664,0.0585,0.0481,0.0397,0.0318,0.0263,0.0218,0.0179,0.0152,0.0128,0.0107,0.0092,0.008,0.007,0.0062,0.0054,0.0049,0.0042,0.0038,0.0034],[0.0704,0.0672,0.0593,0.0489,0.0399,0.0326,0.0265,0.0221,0.0182,0.0151,0.0131,0.0111,0.0095,0.0081,0.0071,0.0062,0.0055,0.0048,0.0042,0.0039,0.0035],[0.0717,0.0686,0.06,0.0493,0.0406,0.033,0.0272,0.0223,0.0187,0.0154,0.013,0.0109,0.0093,0.0082,0.0072,0.0063,0.0055,0.0049,0.0045,0.0039,0.0036]]}};
+const lerp=(a,b,t)=>a+(b-a)*t;
+function effSim(det,kind,E,zz){ // absolute efficiency (fraction of emitted photons), bilinear interpolation in ln E and |z|
+  const T=SIM[det][kind],Ev=SIM.E,Zv=SIM.z,n=Ev.length,m=Zv.length;
+  if(E<=0)return 0;const lowf=E<Ev[0]?E/Ev[0]:1;
+  const le=Math.log(Math.min(Math.max(E,Ev[0]),Ev[n-1]));let i=0;while(i<n-2&&le>Math.log(Ev[i+1]))i++;
+  const te=(le-Math.log(Ev[i]))/(Math.log(Ev[i+1])-Math.log(Ev[i]));
+  const az=Math.abs(zz),zm=Zv[m-1];const zc=Math.min(az,zm);let j=Math.min(m-2,Math.floor(zc/1.5));const tz=(zc-Zv[j])/(Zv[j+1]-Zv[j]);
+  const v=lerp(lerp(T[i][j],T[i][j+1],tz),lerp(T[i+1][j],T[i+1][j+1],tz),te);
+  return lowf*(az>zm?v*(zm/az)*(zm/az):v)}
+const gam2=E=>{const B=Math.log(Math.max(E/4.0026,1));const q=0.7446+0.1429*B+0.01562*B*B-0.00267*B*B*B+1.325e-6*Math.pow(B,8);return 1-Math.exp(-Math.min(30,Math.max(0,q)))};
+const AE=0.251718;                                        // m_p/m_alpha: proton energy at equal velocity
+const KAPPA=0.0384/(4*gam2(395.2)*epsRaw(395.2*AE));       // normalized to SRIM: 32.5e-15 eV cm2 (CM) at E_alpha = 395 keV
+const ETABA=Float64Array.from({length:2601},(_,i)=>{const E=i*0.5;return KAPPA*4*gam2(E)*epsRaw(E*AE)});
+const eps=E=>{if(E<=0)return 0;const T=S.proj==="a"?ETABA:ETAB,u=Math.min(2599,E*2),i=Math.floor(u);return T[i]+(T[i+1]-T[i])*(u-i)};
+function traj(Ep,nf,out){out[0]=Ep;for(let k=0;k<NZ-1;k++){const dn=0.5*(nf[k]+nf[k+1])*DZ;let E=out[k];const e1=eps(E);const Em=E-0.5*e1*dn;out[k+1]=Math.max(0,E-eps(Em)*dn)}return out}
+
+let seed=12345;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};
+const gauss=()=>{let u=0,v=0;while(u===0)u=rnd();v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+const ZE=[],ZT=[],ZS=[],ZY=[],PH=[];
+for(let i=0;i<ND;i++){const a=new Float64Array(NZ),b=new Float64Array(NZ);for(let k=0;k<NZ;k++){a[k]=gauss();b[k]=gauss()}ZE.push(a);ZT.push(b);ZS.push(gauss());ZY.push(gauss());PH.push(rnd())}
+
+const nfBuf=new Float64Array(NZ),tmp=new Float64Array(NZ);
+const delta=Ep=>Math.min(0.8,Math.max(0,S.bh/100*S.I*Ep/1000/25));   // fraction of gas removed: bh% per 25 W of beam (I*E_b)
+function nfOf(f,Ep){const d=delta(Ep);for(let k=0;k<NZ;k++)nfBuf[k]=n0[k]*f*(1-d);return nfBuf}
+function solveEp(target,atIndex){ // Ep such that E(z[atIndex]) = ER
+  let lo=S.ER,hi=S.ER+2500;
+  for(let it=0;it<45;it++){const mid=0.5*(lo+hi);traj(mid,nfOf(S.f,mid),tmp);if(tmp[atIndex]>target)hi=mid;else lo=mid}
+  return 0.5*(lo+hi)}
+const zcen=()=>0;                              // the detector is always centred on the chamber
+const effProf=(zz)=>1/(1+Math.pow(Math.abs(2*(zz-zcen())/S.L),S.shape));
+const mp=()=>PM[S.proj];
+const lam2=ER=>{const m=mp(),mu=m*MN/(m+MN);return 8.251e-24/(mu*(ER*MN/(m+MN)/1000))};
+
+
+// normalized Voigt profile (Gaussian of sigma sg x Lorentzian of FWHM G) with the Weideman Faddeeva function (N = 32, error < 1e-12)
+const WL=4.75682846001,WA=[-1.30317978631e-12,3.74088129317e-12,8.03036789996e-12,-2.15436320778e-11,-5.54423594817e-11,1.16582510935e-10,4.15374309183e-10,-5.2310204812e-10,-3.20801509172e-09,8.12488945685e-10,2.37975567799e-08,2.29304390651e-08,-1.48130789151e-07,-4.18407637022e-07,4.25583313758e-07,4.40153173158e-06,6.821031944e-06,-2.14096192017e-05,-0.000130754492546,-0.0002453298027,0.000392591360701,0.00451954110535,0.0190061557848,0.0573044035298,0.140607162269,0.295444510715,0.546013972064,0.901925489365,1.34554416923,1.82566962963,2.2635372999,2.57225340812];
+function voigt(x,sg,G){
+  if(G<=1e-9){const u=x/sg;return Math.exp(-0.5*u*u)/(2.5066283*sg)}
+  const sq=1.41421356*sg,zr=Math.abs(x)/sq,zi=0.5*G/sq;
+  const nr=WL-zi,ni=zr,dr=WL+zi,di=-zr,q=dr*dr+di*di;
+  const Zr=(nr*dr+ni*di)/q,Zi=(ni*dr-nr*di)/q;
+  let pr=WA[0],pi=0;for(let i=1;i<WA.length;i++){const t=pr*Zr-pi*Zi+WA[i];pi=pr*Zi+pi*Zr;pr=t}
+  const d2r=dr*dr-di*di,d2i=2*dr*di,q2=d2r*d2r+d2i*d2i;
+  const re=2*(pr*d2r+pi*d2i)/q2+0.56418958*dr/q;
+  return re/(2.5066283*sg)}
+
+// ---- energy straggling: Bohr with a Lindhard-Scharff type reduction at low velocity, variance propagation
+// d(sigma^2)/dn = Omega^2(E) - 2 eps'(E) sigma^2   (n in 1e15 atoms/cm2), and Moliere angular straggling
+const Z1sq=E=>S.proj==="a"?4*gam2(E):1;
+const Emu=E=>E/(S.proj==="a"?4.0026:1.00728);                      // keV per nucleon
+const LSred=E=>{const c=Math.sqrt(Emu(E)/250);return Math.min(1,Math.max(0.02,0.5*(1.36*c-0.016*c*c*c)))};   // chi^2 = E/(25 Z2 keV/u), Z2 = 10
+const om2=E=>S.sm==="m"?2.6e-3*Z1sq(E)*LSred(E):S2;
+const epr=E=>S.sm==="m"?(eps(E+0.5)-eps(Math.max(0,E-0.5))):0;
+function sigTraj(Et,nfa,out){let v=SB2;out[0]=Math.sqrt(v);
+  for(let k=0;k<NZ-1;k++){const dn=0.5*(nfa[k]+nfa[k+1])*DZ,E=Et[k];if(E>1){const g=1-epr(E)*dn;v=v*g*g+om2(E)*dn}out[k+1]=Math.sqrt(v)}return out}
+// Moliere multiple scattering angle (variance in one plane): increments per step
+const MC2={p:938.272,a:3727.379},E4=2.0735e-26,HC=197.327,A0=52917.7;
+function thetaInc(Et,nfa,out){
+  if(S.sm!=="m"){const TH=THETA2*(S.proj==="a"?4:1);for(let k=0;k<NZ;k++)out[k]=TH*nfa[k]*DZ;return out}
+  const Z2=10,aTF=0.8853*A0/Math.pow(Z2,1/3),mc2=MC2[S.proj];let cum=0,tot=0;out[0]=0;
+  for(let k=1;k<NZ;k++){const E=Et[k],dn=0.5*(nfa[k]+nfa[k-1])*DZ;
+    if(E<5||dn<=0){out[k]=0;continue}
+    const Em=E/1000,z1=Z1sq(E),pv=2*Em;
+    cum+=4*Math.PI*dn*1e15*E4*z1*Z2*(Z2+1)/(pv*pv);
+    const pc=Math.sqrt(2*mc2*Em),chi0=HC/(pc*aTF),be=Math.sqrt(2*Em/mc2),al=Math.sqrt(z1)*Z2/(137.036*be),ca2=chi0*chi0*(1.13+3.76*al*al);
+    const bb=Math.log(cum/(1.167*ca2));let B=Math.max(1,bb);for(let it=0;it<8;it++){B=B-(B-Math.log(B)-bb)/(1-1/B);if(!(B>=1))B=1}
+    const t2=0.5*cum*B;out[k]=Math.max(0,t2-tot);tot=Math.max(tot,t2)}
+  return out}
+
+let M={};
+// button highlight: on after a press, off when one of the parameters the result depends on changes
+const HL={};
+const sigBase=()=>JSON.stringify([S.ER,S.Ep,S.f,S.bh,S.I,S.Lc,S.zs,S.proj,S.sm,S.G]);
+const SIGS={ctr:sigBase,eprod:sigBase,eymax:()=>sigBase()+JSON.stringify([S.det,S.Eg,S.L,S.eff,S.shape]),egq:()=>JSON.stringify([S.Eg,S.ER,S.proj])};
+function setHl(id){HL[id]=SIGS[id]();if(id!=="egq")for(const o of["ctr","eprod","eymax"])if(o!==id)delete HL[o];paintHl()}
+function paintHl(){for(const id in SIGS)document.getElementById(id).classList.toggle("on",id in HL)}
+function checkHl(){let ch=false;for(const id in HL)if(SIGS[id]()!==HL[id]){delete HL[id];ch=true}if(ch)paintHl()}
+function compute(){checkHl();
+  S2=S.proj==="a"?2.6e-3*4*gam2(S.ER):2.6e-3;const GL=S.G*(mp()+MN)/MN;      // Lorentzian width in the laboratory frame
+  const f=S.f,nf=Float64Array.from(nfOf(f,S.Ep)),x=new Float64Array(NZ),mean=new Float64Array(NZ),sig=new Float64Array(NZ),eta=new Float64Array(NZ);
+  const s0=Math.sqrt(SB2);
+  const Em=new Float64Array(NZ);traj(S.Ep,nf,Em);sigTraj(Em,nf,sig);
+  const Isig=0.5*lam2(S.ER)*S.w*((mp()+MN)/MN);                      // eV cm^2
+  const IPS=S.I*PPS,e0=1;
+  const prod=new Float64Array(NZ),prod0=new Float64Array(NZ),det=new Float64Array(NZ),det0=new Float64Array(NZ);
+  for(let k=0;k<NZ;k++){
+    x[k]=xa[k]*f*(1-delta(S.Ep));mean[k]=Em[k]-S.ER;eta[k]=S.det==="c"?effProf(z[k])*S.eff/100:effSim(S.det,"pk",S.Eg,z[k]);
+    const c=nf[k]*1e15*Isig*IPS/1000;
+    prod[k]=c*voigt(mean[k],sig[k],GL);prod0[k]=c*voigt(mean[k],s0,GL);
+    det[k]=prod[k]*eta[k]*e0;det0[k]=prod0[k]*eta[k]*e0;
+  }
+  let Tp=0,Td=0;for(let k=0;k<NZ;k++){const w=(k===0||k===NZ-1)?0.5*DZ:DZ;Tp+=prod[k]*w;Td+=det[k]*w}
+  const unit=Tp>=1?["s",1]:(Tp*3600>=1?["h",3600]:(Tp*86400>=1?["day",86400]:["year",31557600]));
+  const U=unit[1];
+  const BW=0.5,NB=Math.ceil((Z1-Z0)/BW);
+  const hp=new Float64Array(NB),hd=new Float64Array(NB),hp0=new Float64Array(NB),hd0=new Float64Array(NB);
+  // each grid point represents a cell of width DZ, split exactly among the bins it overlaps (avoids periodic artefacts)
+  for(let k=0;k<NZ;k++){const l=Math.max(Z0,z[k]-DZ/2),r=Math.min(Z1,z[k]+DZ/2);let b0=Math.min(NB-1,Math.floor((l-Z0)/BW)),b1=Math.min(NB-1,Math.floor((r-Z0)/BW-1e-12));
+    for(let b=b0;b<=b1;b++){const ov=Math.min(r,Z0+(b+1)*BW)-Math.max(l,Z0+b*BW);if(ov<=0)continue;hp[b]+=prod[k]*ov*U;hd[b]+=det[k]*ov*U;hp0[b]+=prod0[k]*ov*U;hd0[b]+=det0[k]*ov*U}}
+  // detected yield curve versus E_b
+  const dEnd=solveEp(S.ER,NZ-1)-S.ER;
+  const dlo=-Math.max(1.5,6*s0,5*GL),dhi=dEnd+Math.max(1.5,4*sig[NZ-1],5*GL);
+  const NY=220,zm=new Float64Array(NY),zsg=new Float64Array(NY),yd=new Float64Array(NY),y1=new Float64Array(NY),y0=new Float64Array(NY);let m1=0,m0=0;
+  const E2=new Float64Array(NZ),sg2=new Float64Array(NZ);
+  for(let j=0;j<NY;j++){const dd=dlo+(dhi-dlo)*j/(NY-1);yd[j]=dd;const nj=nfOf(f,S.ER+dd);traj(S.ER+dd,nj,E2);sigTraj(E2,nj,sg2);let a=0,b=0,az=0,az2=0;
+    // path integral: each interval of 2 cells is subdivided (linear interpolation) until the energy change per substep
+    // is below about one third of the resonance peak FWHM, otherwise narrow peaks are sampled badly (spurious oscillations)
+    for(let k=0;k+2<NZ;k+=2){const dE=E2[k+2]-E2[k],fw=(s)=>{const fg=2.3548*s;return 0.5346*GL+Math.sqrt(0.2166*GL*GL+fg*fg)};
+      const w1=fw(Math.min(s0,sg2[k],sg2[k+2])),m=Math.min(60,Math.max(1,Math.ceil(Math.abs(dE)/(0.33*w1)))),inv=1/m;
+      for(let i=0;i<m;i++){const t=(i+0.5)*inv,mu=E2[k]+dE*t-S.ER,q=(nj[k]*eta[k]*(1-t)+nj[k+2]*eta[k+2]*t),sg=sg2[k]*(1-t)+sg2[k+2]*t,zz=z[k]+2*DZ*t;
+        const gw=q*voigt(mu,sg,GL)*inv;a+=gw;az+=gw*zz;az2+=gw*zz*zz;b+=q*voigt(mu,s0,GL)*inv}}
+    const c=2*DZ*1e15*Isig*IPS*e0*U/1000;zm[j]=a>0?az/a:NaN;zsg[j]=a>0?Math.sqrt(Math.max(0,az2/a-(az/a)*(az/a))):NaN;y1[j]=a*c;y0[j]=b*c;if(y1[j]>m1)m1=y1[j];if(y0[j]>m0)m0=y0[j]}
+  const dth=thetaInc(Em,nf,new Float64Array(NZ));const varY=new Float64Array(NZ),thr=new Float64Array(NZ);{let c0=0,c1=0,c2=0;for(let k=0;k<NZ;k++){const u=z[k]-Z0,w=dth[k];c0+=w;c1+=w*u;c2+=w*u*u;varY[k]=1.0+100*(u*u*c0-2*u*c1+c2)+Math.pow(0.0005*u*10,2);thr[k]=Math.sqrt(c0+2.5e-7)}}
+  const E=[],Y=[],zr=new Float64Array(ND).fill(NaN);
+  for(let i=0;i<ND;i++){const e=new Float64Array(NZ),y=new Float64Array(NZ);let acc=s0*ZS[i],th=0.0005*ZY[i],yy=ZY[i]*1.0;
+    for(let k=0;k<NZ;k++){const dn=0.5*(nf[k]+nf[Math.min(NZ-1,k+1)])*DZ,Ek=Em[k];if(Ek>1){const g=1-epr(Ek)*dn;acc=acc*g+Math.sqrt(om2(Ek)*dn)*ZE[i][k]}th+=Math.sqrt(dth[k])*ZT[i][k];yy+=th*DZ*10;e[k]=mean[k]+acc;y[k]=yy;
+      if(Number.isNaN(zr[i])&&e[k]<=0)zr[i]=z[k]}
+    E.push(e);Y.push(y)}
+  let zR=NaN;for(let k=0;k<NZ;k++){if(mean[k]<=0){zR=z[k];break}}
+  let sz=NaN,dEat=NaN;if(!Number.isNaN(zR)){const k=Math.min(NZ-1,Math.round((zR-Z0)/DZ));const slope=eps(S.ER)*nf[k];sz=slope>0?Math.hypot(sig[k],GL/2.3548)/slope:NaN;dEat=slope}
+  const Ytot=Tp/(IPS);
+  M={thr,GL,zm,zsg,dh:delta(S.Ep),nf,x,mean,sig,s0,eta,prod,prod0,det,det0,hp,hd,hp0,hd0,BW,NB,Tp,Td,Ytot,unit,U,yd,y1,y0,m1,m0,C:m0>0?m1/m0:NaN,varY,E,Y,zr,zR,sz,dEnd,Em};
+  readouts();
+}
+function readouts(){
+  const el=document.getElementById("read"),frac=M.Tp>0?M.Td/M.Tp:NaN,u=M.unit[0];
+  el.innerHTML=[
+    ["Density reduction (beam heating)",fmt(100*M.dh,1)+" %"],
+    ...(S.proj==="a"&&S.Ep>565?[["(α,n) channel","open above E<sub>α</sub> = 565 keV"]]:[]),
+    ["Energy loss up to the beam stop",fmt(M.dEnd,1)+" keV"],
+    ["E<sub>b</sub> − E<sub>R</sub>",fmt(S.Ep-S.ER,2)+" keV"],
+    ["Reaction position (mean)",Number.isFinite(M.zR)?fmt(Math.abs(M.zR)<0.05?0:M.zR,1)+" cm":"outside the gas"],
+    ["Energy straggling at the reaction point",fmt(Number.isFinite(M.zR)?M.sig[Math.min(NZ-1,Math.max(0,Math.round((M.zR-Z0)/DZ)))]:M.sig[NZ-1],2)+" keV rms"],
+    ["Beam intercepted by the tube",(()=>{let mv=0;for(let k=0;k<NZ;k++)mv=Math.max(mv,M.varY[k]);const p=Math.exp(-100/(2*mv));return p<1e-9?"< 10⁻⁷ %":fmt(100*p,2)+" %"})()],
+    ["Scattering angle at the end of the chamber",fmt(180/Math.PI*M.thr[Math.min(NZ-1,Math.max(0,Math.round((S.Lc/2-Z0)/DZ)))],2)+"° rms (1 plane)"],
+    ["Spatial width σ<sub>z</sub>",fmt(M.sz,1)+" cm"],
+    ["Yield per "+(S.proj==="a"?"alpha":"proton"),sci(M.Ytot)],
+    ["Produced reactions / "+u,sci(M.Tp*M.U)],
+    ["Detected reactions / "+u,sci(M.Td*M.U)],
+    ...(S.det!=="c"?[["Peak efficiency at the centre (E<sub>γ</sub>)",fmt(100*effSim(S.det,"pk",S.Eg,0),1)+" %"],["Total efficiency at the centre",fmt(100*effSim(S.det,"tot",S.Eg,0),1)+" %"]]:[]),
+    ["Detected / produced",fmt(frac)],
+    ["C = max yield with / without straggling",fmt(M.C)]
+  ].map(r=>`<span>${r[0]}</span><span>${r[1]}</span>`).join("");
+}
+
+// ---------- drawing ----------
+const cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+let W=900,Hh=900,DPR=1;
+const css=()=>{const s=getComputedStyle(document.documentElement);const g=k=>s.getPropertyValue(k).trim();return{fg:g("--fg"),muted:g("--muted"),line:g("--line"),grid:g("--grid"),beam:g("--beam"),bs:g("--beam-soft"),prod:g("--prod"),det:g("--det"),res:g("--res"),wall:g("--wall"),panel:g("--panel")}};
+function niceTicks(lo,hi,cnt){const span=hi-lo,raw=span/cnt,mag=Math.pow(10,Math.floor(Math.log10(raw))),r=raw/mag,step=(r<1.5?1:r<3?2:r<7?5:10)*mag,out=[];if(!(step>0)||!isFinite(step))return out;for(let v=Math.ceil(lo/step)*step,n=0;v<=hi+step*1e-6&&n<200;v+=step,n++)out.push(+v.toPrecision(12));return out}
+const ML=64,MR=50;
+function layout(){
+  const rows=S.ov?[["A",120],["B",190],["C",84],["D",84],["E",190],["F",200],["G",190]]:[["A",120],["B",190],["C",84],["D",84],["E1",140],["E2",140],["F",200],["G",190]];
+  let y=26;const out={};
+  const LEG={C:16,E:16,E1:16,E2:16,F:34,G:16};   // height of the legend band above the plot
+  for(const [k,h] of rows){const leg=LEG[k]||0;y+=leg;out[k]={top:y,h,leg};y+=h+(k==="A"||k==="B"?32:62)}
+  return {rows:out,total:y};
+}
+function resize(){
+  const w=cv.parentElement.clientWidth-16;W=Math.max(320,w);const L=layout();Hh=L.total+20;DPR=window.devicePixelRatio||1;
+  cv.width=Math.round(W*DPR);cv.height=Math.round(Hh*DPR);cv.style.height=Hh+"px";
+}
+function axes(c,P,xlim,ylim,o={}){
+  const x0=ML,x1=W-MR,y0=P.top,y1=P.top+P.h;
+  const X=v=>x0+(v-xlim[0])/(xlim[1]-xlim[0])*(x1-x0),Yf=v=>y1-(v-ylim[0])/(ylim[1]-ylim[0])*(y1-y0);
+  ctx.save();ctx.font="12px Inter,system-ui,sans-serif";ctx.lineWidth=1;
+  const yt=niceTicks(ylim[0],ylim[1],o.yt||3);
+  ctx.textAlign="right";ctx.textBaseline="middle";
+  for(const v of yt){const yy=Yf(v);ctx.strokeStyle=c.grid;ctx.beginPath();ctx.moveTo(x0,yy);ctx.lineTo(x1,yy);ctx.stroke();ctx.fillStyle=c.muted;ctx.fillText(o.yfmt?o.yfmt(v):String(+v.toPrecision(4)),x0-6,yy)}
+  if(o.vlines)for(const v of o.vlines){ctx.strokeStyle=c.line;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(X(v),y0);ctx.lineTo(X(v),y1);ctx.stroke();ctx.setLineDash([])}
+  ctx.strokeStyle=c.muted;ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x0,y1);ctx.lineTo(x1,y1);ctx.stroke();
+  if(o.xticks){const xt=niceTicks(xlim[0],xlim[1],o.xtn||10);ctx.textAlign="center";ctx.textBaseline="top";for(const v of xt){ctx.strokeStyle=c.muted;ctx.beginPath();ctx.moveTo(X(v),y1);ctx.lineTo(X(v),y1+4);ctx.stroke();ctx.fillStyle=c.muted;ctx.fillText(o.xfmt?o.xfmt(v):String(+v.toFixed(3)),X(v),y1+6)}
+    if(o.xlabel){ctx.fillStyle=c.muted;ctx.fillText(o.xlabel,(x0+x1)/2,y1+22)}}
+  ctx.fillStyle=c.fg;ctx.font="600 13px 'Space Grotesk',Inter,sans-serif";ctx.textAlign="left";ctx.textBaseline="top";ctx.fillText(o.title||"",x0,y0-20-(P.leg||0));
+  if(o.ylabel){ctx.save();ctx.translate(14,(y0+y1)/2);ctx.rotate(-Math.PI/2);ctx.fillStyle=c.muted;ctx.font="12px Inter,system-ui,sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(o.ylabel,0,0);ctx.restore()}
+  ctx.restore();
+  return {X,Y:Yf,x0,x1,y0,y1};
+}
+function curve(A,xs,ys,color,lw,fill,alpha){
+  ctx.save();ctx.beginPath();ctx.rect(A.x0,A.y0-2,A.x1-A.x0,A.y1-A.y0+4);ctx.clip();
+  const path=()=>{ctx.beginPath();for(let i=0;i<xs.length;i++){const X=A.X(xs[i]),Y=A.Y(ys[i]);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y)}};
+  if(fill){path();ctx.lineTo(A.X(xs[xs.length-1]),A.Y(0));ctx.lineTo(A.X(xs[0]),A.Y(0));ctx.closePath();ctx.globalAlpha=alpha||0.2;ctx.fillStyle=fill;ctx.fill();ctx.globalAlpha=1}
+  path();ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.stroke();ctx.restore();
+}
+function bars(A,arr,color,alpha,ymax){
+  ctx.save();ctx.beginPath();ctx.rect(A.x0,A.y0-2,A.x1-A.x0,A.y1-A.y0+4);ctx.clip();ctx.globalAlpha=alpha;ctx.fillStyle=color;
+  for(let b=0;b<arr.length;b++){const v=arr[b];if(v<=0)continue;const xa_=A.X(Z0+b*M.BW),xb=A.X(Z0+(b+1)*M.BW),ya=A.Y(Math.min(v,ymax));ctx.fillRect(xa_,ya,xb-xa_-0.5,A.y1-ya)}
+  ctx.restore();
+}
+function stepOutline(A,arr,color,dash){
+  ctx.save();ctx.beginPath();ctx.rect(A.x0,A.y0-2,A.x1-A.x0,A.y1-A.y0+4);ctx.clip();ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.setLineDash(dash||[]);ctx.beginPath();
+  for(let b=0;b<arr.length;b++){const xa_=A.X(Z0+b*M.BW),xb=A.X(Z0+(b+1)*M.BW),y=A.Y(arr[b]);b?ctx.lineTo(xa_,y):ctx.moveTo(xa_,y);ctx.lineTo(xb,y)}
+  ctx.stroke();ctx.restore();
+}
+function legend(c,A,items){
+  ctx.save();ctx.font="12px Inter,sans-serif";ctx.textBaseline="middle";ctx.textAlign="right";let x=A.x1-6;const y=A.y0-8;
+  for(let i=items.length-1;i>=0;i--){const t=items[i][1],w=ctx.measureText(t).width;ctx.fillStyle=c.fg;ctx.fillText(t,x,y);ctx.fillStyle=items[i][0];ctx.fillRect(x-w-16,y-5,10,10);x-=w+30}
+  ctx.restore();
+}
+function drawG(c,P){
+  if(S.det==="c"){ctx.save();ctx.fillStyle=c.muted;ctx.font="12px Inter,sans-serif";ctx.textAlign="left";ctx.fillText("Custom detector: no Monte Carlo simulation.",ML,P.top+20);ctx.restore();return}
+  const lx=v=>v/1000,X0=0,X1=20;
+  let gmax=0.02;for(let i=0;i<=60;i++){gmax=Math.max(gmax,effSim(S.det,"tot",1000*(X0+(X1-X0)*i/60),0))}const Gx=axes(c,P,[X0,X1],[0,Math.min(1.05,1.12*gmax)],{title:"Simulated efficiency as a function of photon energy (source on the axis)",ylabel:"efficiency",xticks:true,xtn:5,xlabel:"photon energy E_γ (MeV)",yt:4,xfmt:v=>fmt(v,0)+" MeV"});
+  const NP=240,xs=Array.from({length:NP},(_,i)=>1000*(X0+(X1-X0)*i/(NP-1)));
+  const lines=[["tot",0,c.muted,[],"total, z = 0"],["pk",0,c.det,[],"peak, z = 0"],["pk",10,c.det,[6,4],"peak, z = 10 cm"],["pk",20,c.det,[2,3],"peak, z = 20 cm"]];
+  for(const [kind,zz,col,dash,lab] of lines){ctx.save();ctx.strokeStyle=col;ctx.lineWidth=kind==="pk"&&zz===0?2.4:1.6;ctx.setLineDash(dash);ctx.beginPath();xs.forEach((E,i)=>{const X=Gx.X(lx(E)),Y=Gx.Y(effSim(S.det,kind,E,zz));i?ctx.lineTo(X,Y):ctx.moveTo(X,Y)});ctx.stroke();ctx.restore()}
+  ctx.save();ctx.strokeStyle=c.res;ctx.lineWidth=2;ctx.setLineDash([6,4]);const xe=Gx.X(lx(S.Eg));ctx.beginPath();ctx.moveTo(xe,Gx.y0);ctx.lineTo(xe,Gx.y1);ctx.stroke();ctx.restore();
+  ctx.save();ctx.fillStyle=c.det;ctx.beginPath();ctx.arc(xe,Gx.Y(effSim(S.det,"pk",S.Eg,0)),4,0,6.283);ctx.fill();ctx.restore();
+  ctx.save();ctx.font="12px Inter,sans-serif";ctx.textBaseline="middle";ctx.textAlign="right";let x=Gx.x1-6;const y=Gx.y0-8;
+  for(let i=lines.length-1;i>=0;i--){const t=lines[i][4],w=ctx.measureText(t).width;ctx.fillStyle=c.fg;ctx.fillText(t,x,y);ctx.strokeStyle=lines[i][2];ctx.setLineDash(lines[i][3]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-w-26,y);ctx.lineTo(x-w-8,y);ctx.stroke();ctx.setLineDash([]);x-=w+40}
+  ctx.restore()}
+
+// ---------- setup sketch in cavalier oblique projection (front plane xy in true shape, z axis receding at 30 degrees, coefficient 1) ----------
+const cs=document.getElementById("cs"),cx2=cs.getContext("2d");let sigS="";
+function drawSetup(c){
+  const sig=JSON.stringify([W,DPR,S.Lc,S.zs,S.det,S.L,S.proj,c.fg,c.wall,c.beam]);if(sig===sigS)return;sigS=sig;
+  const al=Math.PI/6,ca=Math.cos(al),sa=Math.sin(al),h=S.Lc/2;
+  const Zt0=Z0,Zt1=Math.max(S.zs,0.05),RTo=1.2,RTi=1.0,RAPi=0.35;
+  const D={nai:{Ro:15,Ri:5,L:20,n:"NaI"},bgo:{Ro:10,Ri:3,L:28,n:"BGO"},c:{Ro:10,Ri:3,L:S.L,n:"custom detector"}}[S.det];
+  const pr=(x,y,z)=>[x+z*ca,-(y+z*sa)];                         // projection in cm units (y downwards)
+  const circ=(ax,cc,R,n)=>{const pts=[];for(let i=0;i<n;i++){const t=2*Math.PI*i/n,q=Math.cos(t)*R,r=Math.sin(t)*R;pts.push(ax==="z"?pr(cc[0]+q,cc[1]+r,cc[2]):pr(cc[0],cc[1]+q,cc[2]+r))}return pts};
+  const circX=(cc,R,n)=>{const pts=[];for(let i=0;i<n;i++){const t=2*Math.PI*i/n;pts.push(pr(cc[0],cc[1]+Math.cos(t)*R,cc[2]+Math.sin(t)*R))}return pts};
+  const hull=P=>{const a=P.slice().sort((p,q)=>p[0]-q[0]||p[1]-q[1]),cr=(o,p,q)=>(p[0]-o[0])*(q[1]-o[1])-(p[1]-o[1])*(q[0]-o[0]),lo=[],up=[];
+    for(const p of a){while(lo.length>1&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}
+    for(let i=a.length-1;i>=0;i--){const p=a[i];while(up.length>1&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p)}
+    lo.pop();up.pop();return lo.concat(up)};
+  // elements: cylinders along z (ring: Ro, Ri) and HPGe along x
+  const cylZ=(z0,z1,Ro,Ri)=>({a:circ("z",[0,0,z0],Ro,48),b:circ("z",[0,0,z1],Ro,48),ia:Ri?circ("z",[0,0,z0],Ri,40):null,ib:Ri?circ("z",[0,0,z1],Ri,40):null});
+  const items={tube:cylZ(Zt0,Zt1,RTo,RTi),apu:cylZ(-h-APW,-h,RTi,RAPi),apd:cylZ(h,h+APW,RTi,RAPi),bs:cylZ(Zt1,Zt1+2,2.2,0),det:null,ge:null};
+  if(S.det==="ge"){const x0=6,x1=10,R=4;const A=[],B=[];for(let i=0;i<48;i++){const t=2*Math.PI*i/48,yy=Math.cos(t)*R,zz=Math.sin(t)*R;A.push(pr(x0,yy,zz));B.push(pr(x1,yy,zz))}items.ge={a:A,b:B}}
+  else if(S.det==="nai"){const BXS=[[-10,0,5,15],[0,10,5,15],[5,15,-5,5],[0,10,-15,-5],[-10,0,-15,-5],[-15,-5,-5,5]];
+    items.boxes=BXS.map(b=>{const pts=[];for(const x of[b[0],b[1]])for(const y of[b[2],b[3]])for(const zz of[-10,10])pts.push(pr(x,y,zz));return {pts,a:pts,b:[]}});}
+  else if(S.det==="bgo"){const Ri=3/Math.cos(Math.PI/6),Ro=10/Math.cos(Math.PI/6),hz=14,V=(r,k,zz)=>pr(r*Math.cos(k*Math.PI/3),r*Math.sin(k*Math.PI/3),zz);
+    items.boxes=[0,1,2,3,4,5].map(k=>{const pts=[V(Ri,k,-hz),V(Ri,k+1,-hz),V(Ro,k+1,-hz),V(Ro,k,-hz),V(Ri,k,hz),V(Ri,k+1,hz),V(Ro,k+1,hz),V(Ro,k,hz)];
+      return {pts,a:pts,b:[],E:[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]]}})}
+  else items.det=cylZ(-D.L/2,D.L/2,D.Ro,D.Ri);
+  // fit to the canvas
+  const all=[];for(const k in items){const it=items[k];if(k==="boxes"){for(const bb of it)all.push(...bb.pts)}else if(it){all.push(...it.a,...it.b)}}
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;for(const p of all){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])}
+  const padX=70,padT=46,padB=44,wU=x1-x0,hU=y1-y0,s=Math.min((W-2*padX)/wU,330/hU),Hs=Math.round(hU*s+padT+padB);
+  cs.width=Math.round(W*DPR);cs.height=Math.round(Hs*DPR);cs.style.height=Hs+"px";
+  const g=cx2;g.setTransform(DPR,0,0,DPR,0,0);g.clearRect(0,0,W,Hs);
+  const ox=(W-wU*s)/2-x0*s,oy=padT-y0*s,T=p=>[ox+p[0]*s,oy+p[1]*s],P3=(x,y,z)=>T(pr(x,y,z));
+  const poly=(pts,close)=>{g.beginPath();pts.forEach((p,i)=>{const q=T(p);i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});if(close)g.closePath()};
+  const body=(it,fill,alpha,stroke,lw)=>{g.save();poly(hull(it.a.concat(it.b)),true);g.globalAlpha=alpha;g.fillStyle=fill;g.fill();g.globalAlpha=1;g.strokeStyle=stroke;g.lineWidth=lw;g.stroke();
+    poly(it.a,true);g.stroke();poly(it.b,true);g.stroke();
+    if(it.ia){g.setLineDash([3,3]);g.globalAlpha=.8;poly(it.ia,true);g.stroke();poly(it.ib,true);g.stroke();poly(hull(it.ia.concat(it.ib)),true);g.stroke();g.setLineDash([]);g.globalAlpha=1}g.restore()};
+  g.font="600 13px 'Space Grotesk',Inter,sans-serif";g.fillStyle=c.fg;g.textAlign="left";g.textBaseline="top";g.fillText("Setup sketch, cavalier oblique projection (z receding at 30°, 1:1 scale on z)",8,6);
+  // reference z axis (below the drawing)
+  // beam stop (far) and tube
+  body(items.bs,c.wall,.9,c.muted,1.2);
+  body(items.tube,c.bs,.35,c.muted,1.2);
+  // gas: strips along z with opacity proportional to the nominal density
+  {const nmax=Math.max(...n0);const sh=[ca,-sa],nn=[-sh[1],sh[0]];const NS=140;
+   for(let i=0;i<NS;i++){const k0=Math.floor(i*(NZ-1)/NS),k1=Math.floor((i+1)*(NZ-1)/NS),a=0.5*(n0[k0]+n0[k1])/nmax;if(a<0.01)continue;
+     const c0=pr(0,0,z[k0]),c1=pr(0,0,z[k1]),R=RTi,q=[[c0[0]+nn[0]*R,c0[1]+nn[1]*R],[c1[0]+nn[0]*R,c1[1]+nn[1]*R],[c1[0]-nn[0]*R,c1[1]-nn[1]*R],[c0[0]-nn[0]*R,c0[1]-nn[1]*R]];
+     g.save();poly(q,true);g.globalAlpha=Math.min(.85,a*.85);g.fillStyle=c.beam;g.fill();g.restore()}}
+  body(items.apu,c.wall,.95,c.fg,1.1);body(items.apd,c.wall,.95,c.fg,1.1);
+  // detector
+  if(items.det)body(items.det,c.det,.16,c.det,1.6);
+  if(items.boxes){for(const bb of items.boxes){g.save();poly(hull(bb.pts),true);g.globalAlpha=.14;g.fillStyle=c.det;g.fill();g.globalAlpha=1;g.strokeStyle=c.det;g.lineWidth=1.4;g.stroke();
+    // edges of the box (8 vertices: index = 4*ix+2*iy+iz)
+    const E=bb.E||[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];g.globalAlpha=.9;for(const [i,j] of E){const p=T(bb.pts[i]),q=T(bb.pts[j]);g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke()}g.restore()}}
+  if(items.ge)body(items.ge,c.res,.22,c.res,1.6);
+  // beam
+  {const a=P3(0,0,Zt0),b=P3(0,0,Zt1);g.save();g.strokeStyle=c.prod;g.lineWidth=2;g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();
+   const d=[b[0]-a[0],b[1]-a[1]],L=Math.hypot(d[0],d[1]),u=[d[0]/L,d[1]/L],m=P3(0,0,Zt0+6);g.fillStyle=c.prod;g.beginPath();g.moveTo(m[0]+u[0]*8,m[1]+u[1]*8);g.lineTo(m[0]-u[0]*4-u[1]*5,m[1]-u[1]*4+u[0]*5);g.lineTo(m[0]-u[0]*4+u[1]*5,m[1]-u[1]*4-u[0]*5);g.fill();
+   const o=P3(0,0,0);g.beginPath();g.arc(o[0],o[1],3.5,0,6.283);g.fill();g.restore()}
+  // labels
+  const lab=(t,p,dx,dy,col,al2)=>{g.save();g.font="12px Inter,system-ui,sans-serif";g.fillStyle=col||c.fg;g.textAlign=al2||"center";g.textBaseline="middle";g.fillText(t,p[0]+dx,p[1]+dy);g.restore()};
+  const line=(p,q,col)=>{g.save();g.strokeStyle=col||c.muted;g.lineWidth=1;g.setLineDash([2,3]);g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke();g.restore()};
+  {const p=P3(0,RTo,-h-APW/2),q=[p[0]-30,p[1]-38];line(p,q);lab("AP_u",q,0,-8)}
+  {const p=P3(0,RTo,h+APW/2),q=[p[0]+10,p[1]-48];line(p,q);lab("AP_d",q,0,-8)}
+  {const p=P3(0,0,Zt1+2),q=[p[0]+34,p[1]+30];line(p,q);lab("beam stop (z = "+fmt(Zt1,1)+" cm)",q,4,10,null,"center")}
+  {const p=P3(0,-RTo,Zt0+2),q=[p[0]-4,p[1]+26];line(p,q);lab("beam tube Ø 20 / 24 mm",q,0,10)}
+  {const o=P3(0,0,0);lab("z = 0",o,-4,-16)}
+  {const a=P3(0,0,Zt0+8);lab("beam",a,-6,-16,c.prod)}
+  if(items.det){lab(D.n+": "+fmt(D.L,0)+" cm long, bore Ø "+fmt(2*D.Ri*10,0)+" mm, thickness "+fmt((D.Ro-D.Ri)*10,0)+" mm",[W-12,oy+y1*s+22],0,0,c.det,"right")}
+  if(items.boxes){lab(S.det==="nai"?"NaI: 6 crystals 10 × 10 × 20 cm, 10 × 10 cm bore":"BGO: 6 trapezoidal prisms, hexagonal bore (inscribed Ø 60 mm), 70 mm thick, 28 cm long",[W-12,oy+y1*s+22],0,0,c.det,"right")}
+  if(items.ge){lab("HPGe Ø 8 × 4 cm, at 90° (x axis)",[W-12,oy+y1*s+22],0,0,c.res,"right")}
+  // dimension line of the chamber length between AP_u and AP_d
+  {const a=P3(0,-(RTo+1.2),-h),b=P3(0,-(RTo+1.2),h);g.save();g.strokeStyle=c.muted;g.fillStyle=c.muted;g.lineWidth=1;g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();
+   for(const p of [a,b]){g.beginPath();g.moveTo(p[0]-4,p[1]-4);g.lineTo(p[0]+4,p[1]+4);g.stroke()}g.restore();lab("chamber: "+fmt(S.Lc,1)+" cm",[(a[0]+b[0])/2,(a[1]+b[1])/2],30,26)}
+}
+
+function draw(t){
+  try{drawSetup(css())}catch(e){console.error(e)}
+  const c=css(),L=layout();
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,Hh);
+  const h=S.Lc/2,COL0=-h-APW,COL1=-h,COL2=h,COL3=h+APW,XM=Math.max(-Z0,Z1)+2,xlim=[-XM,XM],vl=[COL0,COL1,COL2,COL3,Z1],R=L.rows;
+  const RT=10,RTO=12;                                       // beam tube: inner radius 10 mm, outer 12 mm
+  let bm=0.6;for(let k=0;k<NZ;k++)bm=Math.max(bm,3*Math.sqrt(M.varY[k]));
+  let ysp=1.2*bm;if(S.tube)ysp=Math.max(ysp,1.15*RTO);ysp=Math.min(ysp,40);
+  const A=axes(c,R.A,xlim,[-ysp,ysp],{title:"Beam section and direction (angular straggling)",ylabel:"y (mm)",vlines:vl,yt:2});
+  ctx.save();ctx.beginPath();ctx.rect(A.x0,A.y0,A.x1-A.x0,A.y1-A.y0);ctx.clip();
+  const yb=S.tube?RT:ysp;                                    // the apertures fill the space up to the inner wall of the tube
+  ctx.fillStyle=c.wall;ctx.fillRect(A.X(COL0),A.Y(yb),A.X(COL1)-A.X(COL0),A.Y(3.5)-A.Y(yb));ctx.fillRect(A.X(COL0),A.Y(-3.5),A.X(COL1)-A.X(COL0),A.Y(-yb)-A.Y(-3.5));
+  ctx.fillRect(A.X(COL2),A.Y(yb),A.X(COL3)-A.X(COL2),A.Y(3.5)-A.Y(yb));ctx.fillRect(A.X(COL2),A.Y(-3.5),A.X(COL3)-A.X(COL2),A.Y(-yb)-A.Y(-3.5));
+  if(S.tube){ctx.globalAlpha=.9;ctx.fillStyle=c.muted;for(const sg of[1,-1]){ctx.fillRect(A.x0,Math.min(A.Y(sg*RT),A.Y(sg*RTO)),A.x1-A.x0,Math.abs(A.Y(RTO)-A.Y(RT)))}ctx.globalAlpha=1}
+  ctx.globalAlpha=.22;ctx.fillStyle=c.prod;ctx.beginPath();for(let k=0;k<NZ;k+=3){const X=A.X(z[k]),Y=A.Y(Math.sqrt(M.varY[k]));k?ctx.lineTo(X,Y):ctx.moveTo(X,Y)}for(let k=NZ-1;k>=0;k-=3){ctx.lineTo(A.X(z[k]),A.Y(-Math.sqrt(M.varY[k])))}ctx.closePath();ctx.fill();ctx.globalAlpha=1;
+  ctx.restore();
+  ctx.fillStyle=c.muted;ctx.font="11px Inter,sans-serif";ctx.textAlign="center";ctx.textBaseline="bottom";{const ya=S.tube?A.Y(-RT)-2:A.y1-2;ctx.fillText("AP_u",A.X((COL0+COL1)/2),ya);ctx.fillText("AP_d",A.X((COL2+COL3)/2),ya)}
+  if(S.tube){ctx.textAlign="left";ctx.textBaseline="top";ctx.fillText("beam tube: inner Ø 20 mm, outer 24 mm",A.x0+6,A.Y(RT)+3)}
+  let lo=Math.min(M.mean[NZ-1]-3*M.sig[NZ-1],-0.3),hi=Math.max(M.mean[0]+3*M.sig[0],0.3);const pad=0.06*(hi-lo);lo-=pad;hi+=pad;
+  const Bx=axes(c,R.B,xlim,[lo,hi],{title:"Beam energy distribution (energy straggling)",ylabel:"E − E_R (keV)",vlines:vl,yt:4});
+  ctx.save();ctx.beginPath();ctx.rect(Bx.x0,Bx.y0,Bx.x1-Bx.x0,Bx.y1-Bx.y0);ctx.clip();ctx.globalAlpha=.2;ctx.fillStyle=c.prod;ctx.beginPath();
+  for(let k=0;k<NZ;k+=3){const X=Bx.X(z[k]),Y=Bx.Y(M.mean[k]+M.sig[k]);k?ctx.lineTo(X,Y):ctx.moveTo(X,Y)}for(let k=NZ-1;k>=0;k-=3){ctx.lineTo(Bx.X(z[k]),Bx.Y(M.mean[k]-M.sig[k]))}ctx.closePath();ctx.fill();ctx.globalAlpha=1;
+  ctx.strokeStyle=c.res;ctx.lineWidth=2;ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(Bx.x0,Bx.Y(0));ctx.lineTo(Bx.x1,Bx.Y(0));ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle=c.fg;ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<NZ;k+=3){const X=Bx.X(z[k]),Y=Bx.Y(M.mean[k]);k?ctx.lineTo(X,Y):ctx.moveTo(X,Y)}ctx.stroke();ctx.restore();
+  ctx.fillStyle=c.res;ctx.font="12px Inter,sans-serif";ctx.textAlign="right";ctx.textBaseline="bottom";ctx.fillText("E_R",Bx.x1-4,Bx.Y(0)-3);
+  const per=7,span=Z1-Z0;
+  ctx.save();
+  for(let i=0;i<ND;i++){
+    const u=((t/per+PH[i])%1),zi=Z0+u*span,k=Math.min(NZ-1,Math.round((zi-Z0)/DZ));
+    ctx.fillStyle=c.beam;ctx.globalAlpha=.85;
+    ctx.beginPath();ctx.arc(A.X(zi),A.Y(Math.max(-ysp,Math.min(ysp,M.Y[i][k]))),2.1,0,6.283);ctx.fill();
+    ctx.beginPath();ctx.arc(Bx.X(zi),Bx.Y(Math.max(lo,Math.min(hi,M.E[i][k]))),2.1,0,6.283);ctx.fill();
+    if(!Number.isNaN(M.zr[i])){const dz2=zi-M.zr[i];if(dz2>=0&&dz2<2.0){const a=1-dz2/2.0;ctx.globalAlpha=a;ctx.fillStyle=c.prod;ctx.beginPath();ctx.arc(Bx.X(M.zr[i]),Bx.Y(0),3+7*(1-a),0,6.283);ctx.fill()}}
+  }
+  ctx.restore();
+  const Cx=axes(c,R.C,xlim,[0,Math.max(...n0)*S.f/nref*1.15],{title:"Density profile n(z)",ylabel:"n / n standard",vlines:vl,yt:2,xticks:true,xtn:18,xlabel:"position z along the axis (cm)"});
+  curve(Cx,Array.from(z),Array.from(M.nf,v=>v/nref),c.beam,2.2,c.beam,.2);
+  if(M.dh>0.0005){ctx.save();ctx.strokeStyle=c.muted;ctx.lineWidth=1.6;ctx.setLineDash([6,4]);ctx.beginPath();for(let k=0;k<NZ;k+=3){const X=Cx.X(z[k]),Y=Cx.Y(n0[k]*S.f/nref);k?ctx.lineTo(X,Y):ctx.moveTo(X,Y)}ctx.stroke();ctx.restore();
+    legend(c,Cx,[[c.beam,"with beam heating (−"+fmt(100*M.dh,1)+"%)"],[c.muted,"nominal (dashed)"]])}
+  const etaMax=Math.max(1e-6,...M.eta);const Dx=axes(c,R.D,xlim,[0,etaMax*1.2],{title:S.det==="c"?"Peak efficiency profile ε(z)":"Simulated peak efficiency ε(z) for photons of "+fmt(S.Eg,0)+" keV",ylabel:"ε (fraction of emitted photons)",vlines:vl,yt:2,xticks:true,xtn:18,xlabel:"position z along the axis (cm)"});
+  curve(Dx,Array.from(z),Array.from(M.eta),c.det,2.2,c.det,.2);
+  const un=M.unit[0],ylab="reactions / (0.5 cm · "+un+")";
+  const ymaxA=Math.max(...(S.ns?M.hp0:[0]),...M.hp);const none=!(ymaxA>1e-25);
+  let ymax=none?1:ymaxA*1.18;if(S.fx){if(S.fxMax==null)S.fxMax=ymax;ymax=S.fxMax}else S.fxMax=null;
+  const eo={vlines:vl,yt:3,ylabel:ylab,xticks:true,xtn:18,xlabel:"position z along the axis (cm)"};
+  if(S.ov){
+    const Ex=axes(c,R.E,xlim,[0,ymax],{...eo,title:"Reactions along the target: produced and detected"});
+    bars(Ex,M.hp,c.prod,.45,ymax);bars(Ex,M.hd,c.det,.55,ymax);
+    if(S.ns){stepOutline(Ex,M.hp0,c.prod,[6,4]);stepOutline(Ex,M.hd0,c.det,[6,4])}
+    legend(c,Ex,[[c.prod,"produced "+sci(M.Tp*M.U,1)+"/"+un],[c.det,"detected "+sci(M.Td*M.U,1)+"/"+un]].concat(S.ns?[[c.muted,"dashed: without straggling"]]:[]));
+  }else{
+    const E1=axes(c,R.E1,xlim,[0,ymax],{...eo,title:"Produced reactions along the target"});bars(E1,M.hp,c.prod,.6,ymax);if(S.ns)stepOutline(E1,M.hp0,c.prod,[6,4]);legend(c,E1,[[c.prod,"produced "+sci(M.Tp*M.U,1)+"/"+un]]);
+    const E2=axes(c,R.E2,xlim,[0,ymax],{...eo,title:"Detected reactions along the target"});bars(E2,M.hd,c.det,.6,ymax);if(S.ns)stepOutline(E2,M.hd0,c.det,[6,4]);legend(c,E2,[[c.det,"detected "+sci(M.Td*M.U,1)+"/"+un]]);
+  }
+  if(none){ctx.save();ctx.fillStyle=c.muted;ctx.font='13px Inter,sans-serif';ctx.textAlign='center';ctx.fillText('No reaction: E_R is not reached inside the gas with this E_b',(W+ML)/2,L.rows[S.ov?'E':'E1'].top+L.rows[S.ov?'E':'E1'].h/2);ctx.restore()}
+  const dlo=M.yd[0],dhi=M.yd[M.yd.length-1],ym=(Math.max(M.m0,M.m1)>1e-25?Math.max(M.m0,M.m1):1)*1.18;
+  const Fx=axes(c,R.F,[S.ER+dlo,S.ER+dhi],[0,ym],{title:"Detected yield as a function of beam energy",ylabel:"detected / "+un,xticks:true,xtn:8,xlabel:"beam energy E_b (keV)",yt:3});
+  const xs=Array.from(M.yd,v=>S.ER+v);
+  curve(Fx,xs,Array.from(M.y0),c.muted,1.8,null);
+  // fill coloured by the mean z of origin of the detected events
+  const cm=t=>{const st=[[42,109,244],[24,168,128],[240,150,30]],p=Math.max(0,Math.min(1,t))*2,i=Math.min(1,Math.floor(p)),f=p-i;return"rgb("+[0,1,2].map(q=>Math.round(st[i][q]+(st[i+1][q]-st[i][q])*f)).join(",")+")"};
+  let zlo=Infinity,zhi=-Infinity;for(let j=0;j<M.y1.length;j++)if(M.y1[j]>0.02*M.m1&&Number.isFinite(M.zm[j])){zlo=Math.min(zlo,M.zm[j]-M.zsg[j]);zhi=Math.max(zhi,M.zm[j]+M.zsg[j])}
+  if(!(zhi>zlo)){zlo=-1;zhi=1}const pz=0.08*(zhi-zlo);zlo-=pz;zhi+=pz;
+  ctx.save();for(let j=0;j<M.y1.length-1;j++){if(!(M.y1[j]>0)||!Number.isFinite(M.zm[j]))continue;ctx.fillStyle=cm((M.zm[j]-zlo)/(zhi-zlo));ctx.globalAlpha=.55;const xa2=Fx.X(xs[j]),xb2=Fx.X(xs[j+1])+0.6;ctx.fillRect(xa2,Fx.Y(M.y1[j]),xb2-xa2,Fx.Y(0)-Fx.Y(M.y1[j]))}ctx.restore();
+  curve(Fx,xs,Array.from(M.y1),c.det,2.6,null,0);
+  // mean z (dashed line, right axis) and ±σ band
+  {const Zy=v=>Fx.y1-(v-zlo)/(zhi-zlo)*(Fx.y1-Fx.y0);ctx.save();ctx.beginPath();ctx.rect(Fx.x0,Fx.y0,Fx.x1-Fx.x0,Fx.y1-Fx.y0);ctx.clip();
+   ctx.globalAlpha=.16;ctx.fillStyle=c.fg;ctx.beginPath();let st=false;const ok=j=>M.y1[j]>0.02*M.m1&&Number.isFinite(M.zm[j]);
+   const idx=[];for(let j=0;j<M.y1.length;j++)if(ok(j))idx.push(j);
+   if(idx.length>1){idx.forEach((j,i)=>{const X=Fx.X(xs[j]),Y=Zy(M.zm[j]+M.zsg[j]);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y)});for(let i=idx.length-1;i>=0;i--){const j=idx[i];ctx.lineTo(Fx.X(xs[j]),Zy(M.zm[j]-M.zsg[j]))}ctx.closePath();ctx.fill();
+    ctx.globalAlpha=1;ctx.strokeStyle=c.fg;ctx.lineWidth=1.6;ctx.setLineDash([5,3]);ctx.beginPath();idx.forEach((j,i)=>{const X=Fx.X(xs[j]),Y=Zy(M.zm[j]);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y)});ctx.stroke()}
+   ctx.restore();ctx.save();ctx.font="12px Inter,system-ui,sans-serif";ctx.fillStyle=c.muted;ctx.textAlign="left";ctx.textBaseline="middle";
+   for(const v of niceTicks(zlo,zhi,3)){const yy=Zy(v);if(yy<Fx.y0||yy>Fx.y1)continue;ctx.fillText(String(+v.toFixed(2)),Fx.x1+6,yy)}
+   ctx.translate(Fx.x1+42,(Fx.y0+Fx.y1)/2);ctx.rotate(Math.PI/2);ctx.textAlign="center";ctx.fillText("z of the detected events (cm)",0,0);ctx.restore();
+   // colour bar, in the band above the plot
+   ctx.save();const by=Fx.y0-31,bw=100;ctx.font="11px Inter,system-ui,sans-serif";ctx.fillStyle=c.muted;ctx.textBaseline="middle";ctx.textAlign="left";
+   const cap="colour: mean z of origin",lo=fmt(zlo,1),hi=fmt(zhi,1)+" cm";let bx=Fx.x0;ctx.fillText(cap,bx,by+5);bx+=ctx.measureText(cap).width+10;ctx.fillText(lo,bx,by+5);bx+=ctx.measureText(lo).width+6;
+   const g=ctx.createLinearGradient(bx,0,bx+bw,0);for(let q=0;q<=10;q++)g.addColorStop(q/10,cm(q/10));ctx.globalAlpha=.8;ctx.fillStyle=g;ctx.fillRect(bx,by,bw,10);ctx.globalAlpha=1;ctx.fillStyle=c.muted;ctx.fillText(hi,bx+bw+6,by+5);ctx.restore()}
+  ctx.save();ctx.strokeStyle=c.res;ctx.lineWidth=2;ctx.setLineDash([6,4]);const xe=Fx.X(S.Ep);if(xe>=Fx.x0&&xe<=Fx.x1){ctx.beginPath();ctx.moveTo(xe,Fx.y0);ctx.lineTo(xe,Fx.y1);ctx.stroke()}ctx.restore();
+  legend(c,Fx,[[c.det,"with straggling"],[c.muted,"without straggling"],[c.res,"E_b set"]]);
+  drawG(c,R.G);
+}
+
+// ---------- controls ----------
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const sel=$("pre");
+function fillMenu(){sel.innerHTML="";
+  RES.forEach((r,i)=>{const o=document.createElement("option");o.value=String(i);o.textContent=fmt(r.E,1)+" keV · ωγ "+(r.ul?"≤ ":"= ")+sci(r.w,2)+" eV"+(r.src?" ("+r.src+")":"");sel.appendChild(o)});
+  const o=document.createElement("option");o.value="c";o.textContent="Personalizzata";sel.appendChild(o);
+  $("prelab").textContent=S.proj==="a"?"Resonance ²²Ne(α,γ)²⁶Mg":"Resonance ²²Ne(p,γ)²³Na"}
+fillMenu();
+function sync(){$("proj").value=S.proj;$("tb").checked=S.tube;const set=(i,v)=>{const e=document.getElementById(i);if(document.activeElement!==e)e.value=v};
+  set("pre",S.pre);
+  set("zs_n",S.zs.toFixed(1));set("zs_r",S.zs);set("lc_n",S.Lc.toFixed(1));set("lc_r",S.Lc);set("sm",S.sm);set("bh_n",S.bh.toFixed(1));set("bh_r",S.bh);set("f_n",S.f.toFixed(2));set("f_r",Math.log10(S.f));
+  set("ep_n",S.Ep.toFixed(2));set("ep_r",S.Ep);
+  set("er_n",S.ER.toFixed(1));set("er_r",S.ER);
+  set("w_n",S.w.toExponential(2));set("w_r",Math.log10(S.w));
+  set("g_n",S.G.toFixed(3));set("g_r",Math.log10(S.G));
+  set("det",S.det);set("eg_n",S.Eg.toFixed(0));set("eg_r",S.Eg);$("custom").style.display=S.det==="c"?"":"none";set("l_n",S.L.toFixed(1));set("l_r",S.L);
+  
+  set("e_n",S.eff);set("e_r",S.eff);
+  set("i_n",S.I);set("i_r",S.I);
+  set("shape",String(S.shape));
+}
+function bind(nid,rid,key,lo,hi,fromR,toR,after){
+  const n=$(nid),r=$(rid);
+  r.addEventListener("input",()=>{S[key]=clamp(fromR(parseFloat(r.value)),lo,hi);if(after)after();sync();compute()});
+  n.addEventListener("input",()=>{const v=parseFloat(n.value.replace(",","."));if(Number.isFinite(v)){S[key]=clamp(v,lo,hi);if(after)after();compute();r.value=toR(S[key])}});
+  n.addEventListener("change",()=>{sync()});
+}
+const id=v=>v,pw=v=>Math.pow(10,v);
+const custom=()=>{S.pre="c"};
+function centre(){compute();S.Ep=solveEp(S.ER,Math.round((zcen()-Z0)/DZ))}
+bind("lc_n","lc_r","Lc",5,40,id,id,()=>{geom(S.Lc,S.zs);S.fxMax=null});
+bind("zs_n","zs_r","zs",0,50,id,id,()=>{geom(S.Lc,S.zs);S.fxMax=null});
+bind("bh_n","bh_r","bh",0,20,id,id);
+bind("f_n","f_r","f",0.1,10,pw,Math.log10);
+bind("ep_n","ep_r","Ep",100,1100,id,id);
+bind("er_n","er_r","ER",100,1100,id,id,custom);
+bind("w_n","w_r","w",1e-12,10,pw,Math.log10,custom);
+bind("g_n","g_r","G",0.01,10,pw,Math.log10);
+bind("eg_n","eg_r","Eg",0,20000,id,id);
+bind("l_n","l_r","L",1,40,id,id);
+bind("e_n","e_r","eff",1,100,id,id);
+bind("i_n","i_r","I",1,500,id,id);
+function setProj(pj){S.proj=pj;RES=pj==="a"?RES_A:RES_P;fillMenu();const d=pj==="a"?830:479,idx=RES.findIndex(r=>r.E===d);S.pre=String(idx);S.ER=RES[idx].E;S.w=RES[idx].w;S.fxMax=null;centre()}
+$("proj").addEventListener("change",e=>{setProj(e.target.value);sync();compute()});
+$("pre").addEventListener("change",e=>{const v=e.target.value;S.pre=v;if(v!=="c"){const r=RES[+v];S.ER=r.E;S.w=r.w}centre();sync();compute()});
+$("ctr").addEventListener("click",()=>{centre();sync();compute();setHl("ctr")});
+function yieldDet(Ep,ne){const nj=nfOf(S.f,Ep),E2=new Float64Array(NZ),sg2=new Float64Array(NZ);traj(Ep,nj,E2);sigTraj(E2,nj,sg2);let a=0;for(let k=0;k<NZ;k+=2)a+=nj[k]*(ne?1:M.eta[k])*voigt(E2[k]-S.ER,sg2[k],M.GL);return a}
+function maxYield(ne){compute();const lo0=M.yd[0],hi0=M.yd[M.yd.length-1],N=120;let jb=0,vb=-1;
+  for(let j=0;j<=N;j++){const v=yieldDet(S.ER+lo0+(hi0-lo0)*j/N,ne);if(v>vb){vb=v;jb=j}}
+  let lo=S.ER+lo0+(hi0-lo0)*Math.max(0,jb-1)/N,hi=S.ER+lo0+(hi0-lo0)*Math.min(N,jb+1)/N;const g=0.381966;
+  for(let it=0;it<30;it++){const a=lo+g*(hi-lo),b=hi-g*(hi-lo);if(yieldDet(a,ne)<yieldDet(b,ne))lo=a;else hi=b}
+  S.Ep=0.5*(lo+hi);sync();compute()}
+$("eprod").addEventListener("click",()=>{maxYield(true);setHl("eprod")});
+$("eymax").addEventListener("click",()=>{maxYield(false);setHl("eymax")});
+$("shape").addEventListener("change",e=>{S.shape=parseInt(e.target.value,10);S.L=S.shape===8?28:10.6;sync();compute()});
+$("det").addEventListener("change",e=>{S.det=e.target.value;S.fxMax=null;sync();compute()});
+$("egq").addEventListener("click",()=>{const Q=S.proj==="a"?10614.7:8794.1,Ecm=S.ER*MN/(mp()+MN);S.Eg=Math.min(20000,Math.max(0,Q+Ecm));sync();compute();setHl("egq")});
+$("sm").addEventListener("change",e=>{S.sm=e.target.value;S.fxMax=null;compute()});
+$("tb").addEventListener("change",e=>{S.tube=e.target.checked});
+$("ov").addEventListener("change",e=>{S.ov=e.target.checked;resize()});
+$("ns").addEventListener("change",e=>{S.ns=e.target.checked});
+$("fx").addEventListener("change",e=>{S.fx=e.target.checked;S.fxMax=null});
+$("pl").addEventListener("click",()=>{S.play=!S.play;$("pl").textContent=S.play?"Pause":"Resume";if(S.play)last=performance.now()});
+$("rs").addEventListener("click",()=>{for(const k in HL)delete HL[k];paintHl();Object.assign(S,DEF);geom(S.Lc,S.zs);setProj("p");sync();compute()});
+window.addEventListener("resize",resize);
+const reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+if(reduce){S.play=false;$("pl").textContent="Resume"}
+let tt=2.0,last=performance.now();
+function frame(now){if(S.play){tt+=(now-last)/1000}last=now;try{draw(tt)}catch(e){console.error(e)}requestAnimationFrame(frame)}
+S.Ep=300;geom(S.Lc,S.zs);setProj("p");sync();compute();resize();requestAnimationFrame(frame);
+})();
+</script>

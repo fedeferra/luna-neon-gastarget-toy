@@ -1,0 +1,3 @@
+*.bin
+mc/mc
+__pycache__/
