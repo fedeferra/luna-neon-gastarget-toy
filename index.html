@@ -85,7 +85,7 @@ button.on{background:var(--accent);border-color:var(--accent);color:#fff}
       <div class="card">
         <h2>Detector</h2>
         <div class="ctl" style="grid-template-columns:1fr"><label for="det">Detector (efficiency simulated with Monte Carlo)</label><select id="det"><option value="nai">NaI, 6 crystals 10 × 10 × 20 cm, 10 × 10 cm bore</option><option value="bgo">BGO, 6 trapezoidal prisms, hexagonal bore (inscribed Ø 60 mm), 70 mm thick, 28 cm long</option><option value="ge">HPGe 8 × 8 cm, at 90°</option><option value="c">Custom (analytic shape)</option></select></div>
-        <div class="ctl" style="grid-template-columns:1fr"><label for="gl" title="Photons emitted in the decay of the selected resonance: primary transitions plus the secondary transitions of the cascade, intensity in % per resonance decay. The detected rate is the sum over the selected lines of intensity × peak efficiency">Photon lines</label><select id="gl"></select></div>
+        <div class="ctl" style="grid-template-columns:1fr"><label for="gl" title="Photons emitted in the decay of the selected resonance: primary transitions plus the secondary transitions of the cascade, intensity in % per resonance decay. The detected rate is the reaction rate × the emission probability of the selected photon × its peak efficiency">Photon lines</label><select id="gl"></select></div>
         <div class="ctl" id="ulw" style="grid-template-columns:1fr;display:none"><label for="lt">Lines as “E<sub>γ</sub> (keV) : intensity (% per decay)”, separated by semicolons</label><input type="text" id="lt" placeholder="9250 : 41.8 ; 6269 : 31.7" spellcheck="false" autocomplete="off"></div>
         <div class="ctl"><label for="eg_n" title="Used only when the photon source is “Free energy”">Photon energy E<sub>γ</sub> <span class="u">keV</span></label><input type="number" id="eg_n" min="0" max="20000" step="1"><input type="range" id="eg_r" min="0" max="20000" step="10" aria-label="Photon energy, 0 to 20 MeV"></div>
         <div class="btns" style="margin:-4px 0 12px"><button id="egq" type="button">E<sub>γ</sub> = Q + E<sub>cm</sub> (transition to the ground state)</button></div>
@@ -217,7 +217,7 @@ const mp=()=>PM[S.proj];
 // photon lines of the selected resonance: [E_gamma (keV), intensity (% per decay)]
 function presetLines(){if(S.proj!=="p"||S.pre===""||S.pre==="c")return null;const r=RES[+S.pre];return r&&LINES_P[r.E]?LINES_P[r.E]:null}
 function parseLines(t){const o=[];for(const p of String(t).split(/[;\n]+/)){const m=p.trim().match(/^([0-9]*\.?[0-9]+)\s*[:,]\s*([0-9]*\.?[0-9]+)$/);if(m&&+m[1]>0&&+m[2]>0)o.push([Math.min(20000,+m[1]),+m[2]])}return o}
-function curLines(){if(S.gl==="u")return parseLines(S.lt);const L=presetLines();if(L&&S.gl==="a")return L;if(L&&/^\d+$/.test(S.gl)&&L[+S.gl])return[L[+S.gl]];return[[S.Eg,100]]}
+function curLines(){if(S.gl==="u")return parseLines(S.lt);const L=presetLines();if(L&&/^\d+$/.test(S.gl)&&L[+S.gl])return[L[+S.gl]];return[[S.Eg,100]]}
 const lam2=ER=>{const m=mp(),mu=m*MN/(m+MN);return 8.251e-24/(mu*(ER*MN/(m+MN)/1000))};
 
 
@@ -327,7 +327,7 @@ function readouts(){
     ["Yield per "+(S.proj==="a"?"alpha":"proton"),sci(M.Ytot)],
     ["Produced reactions / "+u,sci(M.Tp*M.U)],
     ["Detected reactions / "+u,sci(M.Td*M.U)],
-    ...(S.gl!=="f"?[["Photon lines used",LNr.length+(LNr.length===1?" line":" lines")+", Σ I = "+fmt(LNr.reduce((a,l)=>a+l[1],0),1)+" % per reaction"],...(S.det!=="c"?[["Peak counts per reaction at the centre",fmt(100*LNr.reduce((a,l)=>a+l[1]/100*effSim(S.det,"pk",l[0],0),0),2)+" %"]]:[])]:
+    ...(S.gl!=="f"?[[LNr.length===1?"Photon emission probability":"Photon lines used",LNr.length===1?fmt(LNr[0][1],1)+" % per decay":LNr.length+" lines, Σ I = "+fmt(LNr.reduce((a,l)=>a+l[1],0),1)+" %"],...(S.det!=="c"?[["Peak counts per reaction at the centre",fmt(100*LNr.reduce((a,l)=>a+l[1]/100*effSim(S.det,"pk",l[0],0),0),2)+" %"]]:[])]:
     S.det!=="c"?[["Peak efficiency at the centre (E<sub>γ</sub>)",fmt(100*effSim(S.det,"pk",S.Eg,0),1)+" %"],["Total efficiency at the centre",fmt(100*effSim(S.det,"tot",S.Eg,0),1)+" %"]]:[]),
     ["Detected / produced",fmt(frac)],
     ["C = max yield with / without straggling",fmt(M.C)]
@@ -571,10 +571,10 @@ const selGl=$("gl");
 function fillGl(){const L=presetLines();selGl.innerHTML="";
   const add=(v,t)=>{const o=document.createElement("option");o.value=v;o.textContent=t;selGl.appendChild(o)};
   add("f","Free energy (one photon, 100 % per reaction)");
-  if(L){add("a","All lines of this resonance (weighted by intensity)");L.forEach((l,i)=>add(String(i),"E\u03b3 = "+fmt(l[0],1)+" keV, "+fmt(l[1],1)+" % per decay"+(l[2]?" (cascade)":" (primary)")))}
+  if(L){L.forEach((l,i)=>add(String(i),"E\u03b3 = "+fmt(l[0],1)+" keV, "+fmt(l[1],1)+" % per decay"+(l[2]?" (cascade)":" (primary)")))}
   add("u","User defined lines (edit below)");
-  const ok=S.gl==="f"||S.gl==="u"||(L&&(S.gl==="a"||(/^\d+$/.test(S.gl)&&+S.gl<L.length)));
-  if(!ok)S.gl=L?"a":"f"}
+  const ok=S.gl==="f"||S.gl==="u"||(L&&/^\d+$/.test(S.gl)&&+S.gl<L.length);
+  if(!ok)S.gl="f"}
 function sync(){fillGl();$("proj").value=S.proj;$("tb").checked=S.tube;const set=(i,v)=>{const e=document.getElementById(i);if(document.activeElement!==e)e.value=v};
   set("pre",S.pre);set("gl",S.gl);set("lt",S.lt);$("ulw").style.display=S.gl==="u"?"":"none";for(const i of["eg_n","eg_r","egq"])$(i).disabled=S.gl!=="f";
   set("zs_n",S.zs.toFixed(1));set("zs_r",S.zs);set("lc_n",S.Lc.toFixed(1));set("lc_r",S.Lc);set("sm",S.sm);set("bh_n",S.bh.toFixed(1));set("bh_r",S.bh);set("f_n",S.f.toFixed(2));set("f_r",Math.log10(S.f));
