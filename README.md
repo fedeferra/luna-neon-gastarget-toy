@@ -24,6 +24,12 @@ Main controls: beam energy E_b and the three helper buttons (E_b such that E = E
 - Energy straggling: Bohr with a Lindhard Scharff type low velocity reduction, variance propagation d(σ²)/dn = Ω² − 2ε′σ². Angular straggling: Molière.
 - Yield: dY/dz = n(z) · (enrichment) · Iσ · V(E(z) − E_R), V Voigt profile (Weideman Faddeeva function, N = 32), path integral with adaptive substeps.
 
+## Photon lines
+
+For the resonances with published branching ratios the detected rate is the sum over the selected lines of (intensity per decay) × (peak efficiency at that energy and position). Choose one line, all lines of the resonance, a free photon energy (100 % per reaction), or your own list (`E_keV : intensity_% ; ...`).
+
+Data: primary transitions from ENSDF (²²Ne(p,γ)²³Na dataset) for the resonances at 259.7, 436, 479, 629.5, 638.5, 725, 850.9, 896.6, 900.6, 919.8, 928.9, 947.8 and 980.9 keV (lab); Depalo et al., PRC 94, 055804 (2016) for 156.2 and 189.5 keV. Secondary transitions of the cascade (for example the 440 keV line) are not included, and each photon is treated as independent (no cascade summing). Resonances without published branching (upper limits, 661 keV, alpha resonances) use the free energy or user defined lines.
+
 ## Detection efficiency (Monte Carlo)
 
 `mc/mc.c` (C, OpenMP) simulates photons emitted isotropically from points on the beam axis (21 positions, 0 to 30 cm; 28 energies, 20 keV to 20 MeV; 1e6 histories each). Photon cross sections come from xraylib up to 780 keV and Klein Nishina above, Bethe Heitler pair production (Geant4 style); no Rayleigh scattering, no photonuclear reactions, no escape of electrons or K X rays (bremsstrahlung as a single photon with the radiative fraction). The stainless steel beam tube (Ø20/24 mm, assumed) is included.
