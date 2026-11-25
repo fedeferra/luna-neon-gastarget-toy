@@ -15,7 +15,7 @@ Everything runs in the browser: no server, no dependencies. Open `index.html`, o
 
 Open `index.html` locally, or enable GitHub Pages (Settings, Pages, Source: GitHub Actions). The workflow in `.github/workflows/pages.yml` publishes the page at every push to `main`.
 
-Main controls: beam energy E_b and the three helper buttons (E_b such that E = E_R at the target centre; E_b maximizing the reaction rate; E_b maximizing the detection rate), resonance energy and widths, projectile, beam current, ²²Ne enrichment (100 % = pure ²²Ne; it scales only the absolute yield and rates), chamber length, gas stop position, beam heating, detector and photon energy.
+Main controls: beam energy E_b and the three helper buttons (E_b such that E = E_R at the target centre; E_b maximizing the reaction rate; E_b maximizing the detection rate), resonance energy and widths, projectile, detector dead time (detected events are multiplied by 1 − dead time), beam current, ²²Ne enrichment (100 % = pure ²²Ne; it scales only the absolute yield and rates), chamber length, gas stop position, beam heating, detector and photon energy.
 
 ## Model
 

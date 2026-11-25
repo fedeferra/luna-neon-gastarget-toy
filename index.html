@@ -89,6 +89,7 @@ button.on{background:var(--accent);border-color:var(--accent);color:#fff}
         <div class="ctl" id="ulw" style="grid-template-columns:1fr;display:none"><label for="lt">Lines as “E<sub>γ</sub> (keV) : intensity (% per decay)”, separated by semicolons</label><input type="text" id="lt" placeholder="9250 : 41.8 ; 6269 : 31.7" spellcheck="false" autocomplete="off"></div>
         <div class="ctl"><label for="eg_n" title="Used only when the photon source is “Free energy”">Photon energy E<sub>γ</sub> <span class="u">keV</span></label><input type="number" id="eg_n" min="0" max="20000" step="1"><input type="range" id="eg_r" min="0" max="20000" step="10" aria-label="Photon energy, 0 to 20 MeV"></div>
         <div class="btns" style="margin:-4px 0 12px"><button id="egq" type="button">E<sub>γ</sub> = Q + E<sub>cm</sub> (transition to the ground state)</button></div>
+        <div class="ctl"><label for="dt_n" title="Fraction of the acquisition time lost to dead time. Detected events are multiplied by (1 − dead time); the efficiency curves are not affected">Dead time <span class="u">%</span></label><input type="number" id="dt_n" min="0" max="99" step="0.1"><input type="range" id="dt_r" min="0" max="99" step="0.1" aria-label="Detector dead time"></div>
         <div id="custom">
         <div class="ctl"><label for="l_n">Length (FWHM of η) <span class="u">cm</span></label><input type="number" id="l_n" min="1" max="40" step="0.1"><input type="range" id="l_r" min="1" max="40" step="0.1" aria-label="Detector length"></div>
         <div class="ctl"><label for="e_n">Peak efficiency <span class="u">%</span></label><input type="number" id="e_n" min="1" max="100" step="1"><input type="range" id="e_r" min="1" max="100" step="1" aria-label="Peak efficiency"></div>
@@ -156,7 +157,7 @@ const LINES_A={
  "830":[[1808.68,83.01,1],[9508.9,54,0],[4257.2,46,0],[7060.6,16.55,1],[3472.9,15.55,1],[1779.74,15.55,1],[5252.9,9.27,1],[4122.9,4.63,1],[1129.61,4.19,1],[2938.15,0.45,1]]
 };
 let RES=RES_P;
-const DEF={Lc:20,zs:30,f:1,Ep:0,ER:479,w:0.594,G:0.1,L:28,zc:0,eff:57,I:200,en:100,gl:"f",lt:"",shape:8,det:"nai",Eg:1000,tube:true,bh:6,sm:"m",pre:"",ul:false,proj:"p"};
+const DEF={Lc:20,zs:30,f:1,Ep:0,ER:479,w:0.594,G:0.1,L:28,zc:0,eff:57,I:200,en:100,dt:0,gl:"f",lt:"",shape:8,det:"nai",Eg:1000,tube:true,bh:6,sm:"m",pre:"",ul:false,proj:"p"};
 const S={...DEF,ov:true,ns:false,fx:false,play:true,fxMax:null};
 let z=new Float64Array(NZ);
 const sci=(v,dg=2)=>{if(!Number.isFinite(v)||v===0)return "0";const e=Math.floor(Math.log10(Math.abs(v)));const m=v/Math.pow(10,e);const sup="⁰¹²³⁴⁵⁶⁷⁸⁹";const es=String(Math.abs(e)).split("").map(c=>sup[+c]).join("");return m.toFixed(dg)+" × 10"+(e<0?"⁻":"")+es};
@@ -273,7 +274,7 @@ function compute(){checkHl();
   const s0=Math.sqrt(SB2);
   const Em=new Float64Array(NZ);traj(S.Ep,nf,Em);sigTraj(Em,nf,sig);
   const Isig=S.en/100*0.5*lam2(S.ER)*S.w*((mp()+MN)/MN);                      // eV cm^2
-  const IPS=S.I*PPS,e0=1,LN=curLines(),LSUM=LN.reduce((a,l)=>a+l[1]/100,0);
+  const IPS=S.I*PPS,e0=1-S.dt/100,LN=curLines(),LSUM=LN.reduce((a,l)=>a+l[1]/100,0);
   const prod=new Float64Array(NZ),prod0=new Float64Array(NZ),det=new Float64Array(NZ),det0=new Float64Array(NZ);
   for(let k=0;k<NZ;k++){
     x[k]=xa[k]*f*(1-delta(S.Ep));mean[k]=Em[k]-S.ER;eta[k]=S.det==="c"?effProf(z[k])*S.eff/100*LSUM:LN.reduce((a,l)=>a+l[1]/100*effSim(S.det,"pk",l[0],z[k]),0);
@@ -332,6 +333,7 @@ function readouts(){
     ["Detected reactions / "+u,sci(M.Td*M.U)],
     ...(S.gl!=="f"?[[LNr.length===1?"Photon emission probability":"Photon lines used",LNr.length===1?fmt(LNr[0][1],1)+" % per decay":LNr.length+" lines, Σ I = "+fmt(LNr.reduce((a,l)=>a+l[1],0),1)+" %"],...(S.det!=="c"?[["Peak counts per reaction at the centre",fmt(100*LNr.reduce((a,l)=>a+l[1]/100*effSim(S.det,"pk",l[0],0),0),2)+" %"]]:[])]:
     S.det!=="c"?[["Peak efficiency at the centre (E<sub>γ</sub>)",fmt(100*effSim(S.det,"pk",S.Eg,0),1)+" %"],["Total efficiency at the centre",fmt(100*effSim(S.det,"tot",S.Eg,0),1)+" %"]]:[]),
+    ...(S.dt>0?[["Live time fraction",fmt(100-S.dt,1)+" %"]]:[]),
     ["Detected / produced",fmt(frac)],
     ["C = max yield with / without straggling",fmt(M.C)]
   ].map(r=>`<span>${r[0]}</span><span>${r[1]}</span>`).join("");
@@ -588,7 +590,7 @@ function sync(){fillGl();$("proj").value=S.proj;$("tb").checked=S.tube;const set
   set("det",S.det);set("eg_n",S.Eg.toFixed(0));set("eg_r",S.Eg);$("custom").style.display=S.det==="c"?"":"none";set("l_n",S.L.toFixed(1));set("l_r",S.L);
   
   set("e_n",S.eff);set("e_r",S.eff);
-  set("i_n",S.I);set("i_r",S.I);set("en_n",S.en);set("en_r",S.en);
+  set("i_n",S.I);set("i_r",S.I);set("en_n",S.en);set("en_r",S.en);set("dt_n",S.dt.toFixed(1));set("dt_r",S.dt);
   set("shape",String(S.shape));
 }
 function bind(nid,rid,key,lo,hi,fromR,toR,after){
@@ -613,6 +615,7 @@ bind("l_n","l_r","L",1,40,id,id);
 bind("e_n","e_r","eff",1,100,id,id);
 bind("i_n","i_r","I",1,500,id,id);
 bind("en_n","en_r","en",0.1,100,id,id);
+bind("dt_n","dt_r","dt",0,99,id,id);
 function setProj(pj){S.proj=pj;RES=pj==="a"?RES_A:RES_P;fillMenu();const d=pj==="a"?830:479,idx=RES.findIndex(r=>r.E===d);S.pre=String(idx);S.ER=RES[idx].E;S.w=RES[idx].w;S.fxMax=null;centre()}
 $("proj").addEventListener("change",e=>{setProj(e.target.value);sync();compute()});
 $("pre").addEventListener("change",e=>{const v=e.target.value;S.pre=v;if(v!=="c"){const r=RES[+v];S.ER=r.E;S.w=r.w}centre();sync();compute()});
